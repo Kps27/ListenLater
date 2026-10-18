@@ -16,6 +16,7 @@ npm run dev
 | **Enterprise app (primary)** | [http://127.0.0.1:3000](http://127.0.0.1:3000) |
 | **API** | [http://127.0.0.1:3333/health](http://127.0.0.1:3333/health) |
 | **Classic player** | [http://127.0.0.1:8765](http://127.0.0.1:8765) |
+| **Mobile (Expo)** | `npm run dev:mobile` → scan QR in Expo Go |
 
 ### Auth
 
@@ -36,7 +37,32 @@ npm run dev:api
 | `apps/api` | Fastify REST + extraction worker |
 | `index.html` | Original standalone player |
 | `extensions/chrome` | MV3 capture → API |
+| `apps/mobile` | Expo shell (queue + on-device TTS) |
 | `lib/` | Shared model, cleanup, analytics |
+
+## Chrome extension
+
+```bash
+npm run build:extension
+```
+
+Load unpacked from `extensions/chrome` (API must be running).
+
+## Mobile (Expo)
+
+```bash
+npm run dev:mobile
+```
+
+Use `EXPO_PUBLIC_API_URL=http://YOUR_LAN_IP:3333` on a physical device.
+
+## Playwright extraction
+
+```bash
+cd apps/api && npx playwright install chromium
+```
+
+Set `LL_PLAYWRIGHT=0` to disable headless fallback.
 
 ## Tests
 

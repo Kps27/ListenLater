@@ -3,12 +3,15 @@
   "private": true,
   "type": "module",
   "workspaces": [
-    "apps/*"
+    "apps/*",
+    "extensions/*"
   ],
   "scripts": {
     "dev:api": "npm run dev -w @listen-later/api",
     "dev:web": "python3 -m http.server 8765",
     "dev:app": "npm run dev -w @listen-later/web",
+    "dev:mobile": "npm run start -w @listen-later/mobile",
+    "build:extension": "npm run build -w @listen-later/chrome",
     "test": "node --test apps/api/test/*.test.js lib/*.test.js",
     "dev": "concurrently -n api,app,proto -c blue,magenta,green \"npm run dev:api\" \"npm run dev:app\" \"npm run dev:web\""
   },

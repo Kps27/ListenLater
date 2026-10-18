@@ -1,0 +1,14 @@
+{
+  "name": "@listen-later/chrome",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "esbuild extract-entry.js --bundle --outfile=dist/extract.bundle.js --format=iife"
+  },
+  "dependencies": {
+    "@mozilla/readability": "^0.6.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}

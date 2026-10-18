@@ -8,9 +8,11 @@ import { enqueueExtract, startWorker } from './worker.js';
 import { ingestClientText } from './extract.js';
 import { canonicalUrl } from '../../../lib/model.js';
 import { buildTextPayload } from '../../../lib/cleanup.js';
+import { ensureAudioTable, getOrCreateAudioStub } from './audio.js';
 
 const PORT = Number(process.env.PORT || 3333);
 const db = openDb();
+ensureAudioTable(db);
 const sseClients = new Set();
 
 function emit(event, payload) {
@@ -207,6 +209,14 @@ app.get('/v1/items/:id/text', async (req, reply) => {
   const row = db.prepare('select text_body from items where id = ? and user_id = ?').get(req.params.id, req.userId);
   if (!row?.text_body) return reply.code(404).send({ error: 'not_found' });
   reply.type('text/plain').send(row.text_body);
+});
+
+app.get('/v1/items/:id/audio', async (req, reply) => {
+  const voice = String(req.query.voice || 'premium-en');
+  const row = db.prepare('select * from items where id = ? and user_id = ?').get(req.params.id, req.userId);
+  if (!row) return reply.code(404).send({ error: 'not_found' });
+  if (row.status !== 'ready') return reply.code(409).send({ error: 'not_ready', status: row.status });
+  return getOrCreateAudioStub(db, row, voice);
 });
 
 app.get('/v1/items/:id/sentences', async (req, reply) => {
