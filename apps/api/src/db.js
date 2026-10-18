@@ -55,6 +55,12 @@ export function openDb() {
       started_at text,
       done_at text
     );
+    create table if not exists api_sessions (
+      token text primary key,
+      user_id text not null references users(id),
+      label text,
+      created_at text not null
+    );
     create table if not exists shares (
       token text primary key,
       user_id text not null,

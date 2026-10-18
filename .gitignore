@@ -1,4 +1,5 @@
 node_modules/
 apps/api/data/
+apps/web/.next/
 .DS_Store
 *.sqlite

@@ -1,54 +1,50 @@
 # Listen Later
 
-Web prototype and Sprint 0 API for the MVP in [docs/listen-later-dev-handoff.md](docs/listen-later-dev-handoff.md).
+Enterprise audio queue for your reading list — handoff spec in [docs/listen-later-dev-handoff.md](docs/listen-later-dev-handoff.md). Build tracker: [docs/ENTERPRISE-BUILD.md](docs/ENTERPRISE-BUILD.md).
 
-## Run locally (recommended)
+## Local URLs (test here)
 
-Two terminals:
+Start all services:
 
 ```bash
 npm install
-npm run dev:api    # http://127.0.0.1:3333 — Bearer dev-guest-token
-npm run dev:web    # http://127.0.0.1:8765/
+npm run dev
 ```
 
-Open [http://127.0.0.1:8765/](http://127.0.0.1:8765/). On localhost the player uses the API for queue, extraction, sync (SSE), and shares. Set `localStorage.setItem('ll-use-api', '0')` to force offline-only mode.
+| Service | URL |
+| --- | --- |
+| **Enterprise app (primary)** | [http://127.0.0.1:3000](http://127.0.0.1:3000) |
+| **API** | [http://127.0.0.1:3333/health](http://127.0.0.1:3333/health) |
+| **Classic player** | [http://127.0.0.1:8765](http://127.0.0.1:8765) |
 
-Web-only (no API, Jina client fetch):
+### Auth
+
+- **Guest (5 items):** `Authorization: Bearer dev-guest-token` — used by default in the classic player.
+- **Enterprise (unlimited):** In the app at `:3000`, enter your work email and **Sign in** (creates a session via `POST /v1/auth/login`).
+
+API only:
 
 ```bash
-python3 -m http.server 8765
+npm run dev:api
 ```
 
-ES modules need HTTP (not `file://`).
-
-## Environment (API)
-
-| Variable | Purpose |
-| --- | --- |
-| `PORT` | API port (default `3333`) |
-| `LL_DATA_DIR` | SQLite directory (default `apps/api/data` when run via workspace) |
-| `LL_INBOUND_WEBHOOK_SECRET` | Optional secret for `POST /v1/webhooks/inbound-email` |
-
-## In this repo
+## Repo layout
 
 | Path | Purpose |
 | --- | --- |
-| `index.html` | Browser player (queue, TTS, follow-along) |
-| `share.html` | Public share page (URL + title only, §4) |
-| `lib/` | Model, cleanup, analytics, API client |
-| `apps/api/` | Fastify REST + in-process extraction worker |
-| `extensions/chrome/` | MV3 “Save to Listen Later” → `client_text` |
-| `db/schema.sql` | Postgres schema for production |
-| `docs/adr/` | Architecture decisions |
-
-## Chrome extension (dev)
-
-1. Open `chrome://extensions` → Developer mode → Load unpacked → `extensions/chrome/`.
-2. With the API running, click the extension on an article tab.
+| `apps/web` | Next.js enterprise UI |
+| `apps/api` | Fastify REST + extraction worker |
+| `index.html` | Original standalone player |
+| `extensions/chrome` | MV3 capture → API |
+| `lib/` | Shared model, cleanup, analytics |
 
 ## Tests
 
 ```bash
 npm test
 ```
+
+## Remotes
+
+- GitHub: `Kps27/ListenLater` (when configured)
+- Cursor Origin: `nhance/listen-later`

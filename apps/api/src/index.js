@@ -3,6 +3,7 @@ import cors from '@fastify/cors';
 import { randomBytes } from 'node:crypto';
 import { openDb, rowToItem, uid } from './db.js';
 import { registerAuth, GUEST_ITEM_LIMIT, countActiveItems } from './auth.js';
+import { createUserSession } from './sessions.js';
 import { enqueueExtract, startWorker } from './worker.js';
 import { ingestClientText } from './extract.js';
 import { canonicalUrl } from '../../../lib/model.js';
@@ -78,7 +79,21 @@ function createItemRow(db, userId, fields) {
 
 const app = Fastify({ logger: true });
 await app.register(cors, { origin: true });
-registerAuth(app);
+registerAuth(app, db);
+
+app.post('/v1/auth/login', async (req, reply) => {
+  try {
+    const body = req.body || {};
+    const session = createUserSession(db, {
+      email: body.email,
+      display_name: body.display_name || body.name,
+    });
+    return session;
+  } catch (e) {
+    if (e.code === 'invalid_email') return reply.code(400).send({ error: 'invalid_email' });
+    throw e;
+  }
+});
 
 app.get('/health', async () => ({ ok: true }));
 
@@ -155,13 +170,19 @@ app.post('/v1/items', async (req, reply) => {
 
 app.get('/v1/items', async (req) => {
   const state = req.query.state;
+  const q = String(req.query.q || '').trim().toLowerCase();
   let sql = 'select * from items where user_id = ?';
   const params = [req.userId];
   if (state) {
     sql += ' and state = ?';
     params.push(state);
-  } else {
+  } else if (!q) {
     sql += " and state != 'archived'";
+  }
+  if (q) {
+    sql += ' and (lower(title) like ? or lower(site_name) like ? or lower(source_url) like ?)';
+    const like = `%${q}%`;
+    params.push(like, like, like);
   }
   sql += ' order by position';
   const limit = Math.min(Number(req.query.limit) || 100, 200);
@@ -260,7 +281,8 @@ app.post('/v1/shares', async (req, reply) => {
     `insert into shares (token, user_id, item_id, source_url, title, created_at)
      values (?, ?, ?, ?, ?, ?)`
   ).run(token, req.userId, row.id, row.source_url, row.title, now);
-  return { url: `http://127.0.0.1:8765/share.html?t=${token}`, token };
+  const webBase = process.env.LL_WEB_URL || 'http://127.0.0.1:3000';
+  return { url: `${webBase}/s/${token}`, token };
 });
 
 app.get('/v1/shares/:token', async (req, reply) => {
