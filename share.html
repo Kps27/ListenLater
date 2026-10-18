@@ -17,10 +17,22 @@
 <p class="muted" id="sub"></p>
 <p><a id="open" href="#" rel="noopener">Open original</a></p>
 <a class="btn" href="./">Save to Listen later</a>
-<script>
+<script type="module">
 const token = new URLSearchParams(location.search).get('t');
-const shares = JSON.parse(localStorage.getItem('ll-shares') || '{}');
-const row = token && shares[token];
+const apiBase = localStorage.getItem('ll-api-base') || 'http://127.0.0.1:3333';
+
+async function fromApi() {
+  const res = await fetch(`${apiBase}/v1/shares/${encodeURIComponent(token)}`);
+  if (!res.ok) return null;
+  return res.json();
+}
+
+function fromLocal() {
+  const shares = JSON.parse(localStorage.getItem('ll-shares') || '{}');
+  return token && shares[token] ? shares[token] : null;
+}
+
+const row = (await fromApi()) || fromLocal();
 if (!row) {
   document.getElementById('title').textContent = 'Share not found';
   document.getElementById('sub').textContent = 'This link may have expired or was opened on another device.';

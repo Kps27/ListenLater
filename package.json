@@ -1,0 +1,13 @@
+{
+  "name": "listen-later",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev -w @listen-later/api",
+    "dev:web": "python3 -m http.server 8765",
+    "test": "node --test apps/api/test/*.test.js lib/*.test.js"
+  }
+}

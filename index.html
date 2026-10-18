@@ -219,9 +219,10 @@ ol.list li.empty::before{content:none}
 
 <script type="module">
 import {
-  GUEST_ITEM_LIMIT, migrateAll, canAddMore, activeItemCount, positionBetween,
+  GUEST_ITEM_LIMIT, migrateAll, migrateItem, canAddMore, activeItemCount, positionBetween,
   classifyFetchError, blockedMessage, canonicalUrl
 } from './lib/model.js';
+import { api, useApiBackend, probeApi, mapApiItem } from './lib/api-client.js';
 import { toSentences, wordCount as words } from './lib/sentences.js';
 import { createAnalytics } from './lib/analytics.js';
 
@@ -271,9 +272,31 @@ $('#fontUp').onclick = () => { if(fontIdx<FONT_SIZES.length-1){ fontIdx++; ls.se
 
 /* ---------- Storage: local, with the Claude viewer store when it is available ---------- */
 let items = [];
+function mergeItem(row) {
+  const it = migrateItem(row) || row;
+  const i = items.findIndex((x) => x.id === it.id);
+  if (i >= 0) items[i] = { ...items[i], ...it };
+  else items.push(it);
+}
+
 const store = {
-  mode:'local', col:null,
+  mode:'local', col:null, _unsub:null,
   async init(onChange){
+    if (useApiBackend() && (await probeApi())) {
+      try {
+        items = migrateAll(await api.listItems());
+        this.mode = 'api';
+        this._unsub = api.subscribeEvents((row) => {
+          mergeItem(row);
+          onChange();
+        });
+        $('#hint').textContent = 'Paste links — the local API extracts and syncs items to this library.';
+        onChange();
+        return;
+      } catch (e) {
+        console.warn('api store', e);
+      }
+    }
     items = migrateAll(ls.get('ll-items', [])); onChange();
     try{
       const [db, user] = await Promise.all([claude.use('db'), claude.use('user')]);
@@ -287,21 +310,51 @@ const store = {
       }, e => console.warn('db', e));
     }catch(e){ console.warn('store', e); }
   },
-  saveLocal(){ ls.set('ll-items', items); },
+  saveLocal(){ if(this.mode!=='local') return; ls.set('ll-items', items); },
   async add(data){
+    if(this.mode==='api'){
+      try {
+        let res;
+        if (data.text && data.status === 'ready') {
+          res = await api.createFromText(data.title, data.text);
+        } else if (data.source_url) {
+          res = await api.createFromUrls([data.source_url]);
+        } else return;
+        for (const row of res.items || []) mergeItem(mapApiItem(row));
+        render();
+      } catch (e) {
+        if (e.detail?.error === 'guest_limit') toast(`Guest limit: ${GUEST_ITEM_LIMIT} items`);
+        else toast(e.message || 'Could not save');
+        throw e;
+      }
+      return;
+    }
     if(this.mode==='db'){ const {id, ...rest} = data; await this.col.add(rest); return; }
     const id = data.id || newId();
     items.push({ ...data, id }); this.saveLocal(); render();
   },
   async update(id, patch){
+    if(this.mode==='api'){
+      const body = {};
+      for (const k of ['state', 'position', 'progress_sentence', 'title']) {
+        if (patch[k] !== undefined) body[k] = patch[k];
+      }
+      if (patch.state === 'listened') body.state = 'listened';
+      const row = await api.patchItem(id, body);
+      mergeItem(mapApiItem(row));
+      render();
+      return;
+    }
     if(this.mode==='db'){ await this.col.doc(id).update(patch); return; }
     const it = items.find(i=>i.id===id); if(it) Object.assign(it, patch); this.saveLocal(); render();
   },
   async remove(id){
+    if(this.mode==='api'){ await api.deleteItem(id); items = items.filter(i=>i.id!==id); render(); return; }
     if(this.mode==='db'){ await this.col.doc(id).delete(); return; }
     items = items.filter(i=>i.id!==id); this.saveLocal(); render();
   }
 };
+function clientSideExtract(){ return !window.claude && store.mode !== 'api'; }
 const sorted = () => [...items].sort((a,b)=>(a.position??0)-(b.position??0));
 const nextPosition = () => items.reduce((m,i)=>Math.max(m, i.position??0), 0) + 1;
 
@@ -528,11 +581,17 @@ async function archiveListened(){
 }
 async function createShare(it){
   if(!itemUrl(it)) return;
-  const token = Math.random().toString(36).slice(2,10);
-  const shares = ls.get('ll-shares', {});
-  shares[token] = { source_url: itemUrl(it), title: it.title || host(itemUrl(it)), created_at: Date.now() };
-  ls.set('ll-shares', shares);
-  const url = `${location.origin}${location.pathname.replace(/[^/]*$/, '')}share.html?t=${token}`;
+  let url;
+  if (store.mode === 'api') {
+    const r = await api.createShare(it.id);
+    url = r.url || `${location.origin}${location.pathname.replace(/[^/]*$/, '')}share.html?t=${r.token}`;
+  } else {
+    const token = Math.random().toString(36).slice(2,10);
+    const shares = ls.get('ll-shares', {});
+    shares[token] = { source_url: itemUrl(it), title: it.title || host(itemUrl(it)), created_at: Date.now() };
+    ls.set('ll-shares', shares);
+    url = `${location.origin}${location.pathname.replace(/[^/]*$/, '')}share.html?t=${token}`;
+  }
   try{ await navigator.clipboard.writeText(url); toast('Share link copied'); }
   catch{ toast('Share link ready — copy from the address bar'); window.open(url, '_blank'); }
   analytics.track('share_created', { channel: it.source_channel || 'web' });
@@ -583,11 +642,12 @@ async function importPayload(data){
 }
 
 /* ---------- Auto-fetch ---------- */
-const CAN_FETCH = !window.claude;
 const fetching = new Set();
-$('#hint').textContent = CAN_FETCH
-  ? 'Paste links or drop them on the page. Each one is fetched and cleaned up for listening.'
-  : 'Then tell Claude in chat: “fetch my listening queue”. Claude pulls each article and drops the text in here.';
+if (!useApiBackend()) {
+  $('#hint').textContent = !window.claude
+    ? 'Paste links or drop them on the page. Each one is fetched and cleaned up for listening.'
+    : 'Then tell Claude in chat: “fetch my listening queue”. Claude pulls each article and drops the text in here.';
+}
 function cleanMarkdown(md){
   return md
     .replace(/```[\s\S]*?```/g,'')
@@ -633,7 +693,7 @@ async function autoFetch(it){
   fetching.delete(it.id); render();
 }
 function autoFetchPending(){
-  if(!CAN_FETCH) return;
+  if(!clientSideExtract()) return;
   items.filter(i => itemUrl(i) && i.status !== 'ready' && i.status !== 'blocked' && !fetching.has(i.id) && (i.status === 'queued' || i.status === 'failed')).forEach(autoFetch);
 }
 
@@ -663,7 +723,7 @@ function render(){
     const prog = progressOf(it);
     const pct = it.state === 'listened' ? 100 : (n ? Math.round(100*prog/n) : 0);
     const meta = !isReady(it)
-      ? `<span class="m pending">${!CAN_FETCH && it.status === 'queued' ? 'Waiting for text — ask Claude to fetch' : esc(statusLabel(it))}</span>`
+      ? `<span class="m pending">${!clientSideExtract() && it.status === 'queued' ? 'Waiting for text — ask Claude to fetch' : esc(statusLabel(it))}</span>`
       : `<span class="m">${esc(it.site_name || host(itemUrl(it))||'Pasted text')} · ${mins(words(it.text), rate)}${it.state==='listened'?' · listened':''}${it.state==='in_progress'?' · in progress':''}</span>`;
     return `<li class="${it.id===player.currentId?'current':''} ${it.state==='listened'?'listened':''} ${it.status==='blocked'?'blocked':''}" data-id="${esc(it.id)}">
       <button type="button" class="item-main" data-act="open"><span class="t">${esc(it.title || host(itemUrl(it)) || 'Untitled')}</span>${meta}${isReady(it) && pct>0 && it.state !== 'listened' ? `<span class="bar"><i style="width:${pct}%"></i></span>`:''}</button>
@@ -702,7 +762,7 @@ function renderReader(){
   if(isReady(it) && url) actions.push(`<button type="button" class="btn" data-act="share">Share link</button>`);
   const mark = actions.join('');
   if(!isReady(it)){
-    let msg = !CAN_FETCH ? 'This link hasn’t been fetched yet. In chat, ask Claude to <strong>fetch my listening queue</strong> and the article will land here.'
+    let msg = !clientSideExtract() ? 'This link hasn’t been fetched yet. In chat, ask Claude to <strong>fetch my listening queue</strong> and the article will land here.'
       : fetching.has(it.id) || it.status === 'extracting' ? 'Extracting and cleaning the article for listening…'
       : 'Queued for extraction.';
     if(it.status === 'blocked' || it.status === 'failed'){
@@ -809,6 +869,26 @@ async function addUrls(list){
   const fresh = [...new Set(list)].filter(u=>!have.has(canonicalUrl(u)));
   if(!fresh.length){ toast(list.length ? 'Those links are already queued' : 'Paste at least one link starting with http'); return 0; }
   if(!canAddMore(items)){ toast(`Guest limit: ${GUEST_ITEM_LIMIT} items`); return 0; }
+  if (store.mode === 'api') {
+    try {
+      const res = await api.createFromUrls(fresh);
+      let added = 0;
+      for (const row of res.items || []) {
+        const before = items.length;
+        mergeItem(mapApiItem(row));
+        if (items.length > before || !have.has(row.canonical_url)) added++;
+      }
+      if (added) toast(`Added ${added} link${added > 1 ? 's' : ''}`);
+      analytics.track('item_saved', { channel: 'web' });
+      updateGuestNote();
+      render();
+      return added;
+    } catch (e) {
+      if (e.detail?.error === 'guest_limit') toast(`Guest limit: ${GUEST_ITEM_LIMIT} items`);
+      else toast(e.message || 'Could not add links');
+      return 0;
+    }
+  }
   let added = 0;
   for(const url of fresh){
     if(!canAddMore(items)) break;
@@ -864,7 +944,10 @@ $('#list').onclick = async e => {
   const id = li.dataset.id; const act = b.dataset.act;
   if(act==='open'){
     const it = items.find(i=>i.id===id);
-    if(it && (it.status==='blocked' || it.status==='failed')) await store.update(id, { status:'queued', fail_reason:null }).catch(()=>{});
+    if(it && (it.status==='blocked' || it.status==='failed')){
+      if (store.mode === 'api' && it.status === 'failed') await api.retryItem(id).then((row) => mergeItem(mapApiItem(row))).catch(()=>{});
+      else await store.update(id, { status:'queued', fail_reason:null }).catch(()=>{});
+    }
     select(id, {autoplay: player.playing}); return;
   }
   if(act==='done'){ await toggleListened(id); return; }
