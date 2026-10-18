@@ -1,0 +1,945 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Listen later</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#E9EDF0; --panel:#F7F8F9; --ink:#1B2430; --muted:#5D6875; --line:#CDD4DB;
+  --pine:#2E5E52; --pine-ink:#FFFFFF; --mark:#F3D27A; --mark-ink:#1B2430; --warn:#9A4B1E;
+  --serif:"Newsreader", Georgia, "Times New Roman", serif;
+  --sans:"Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --read:1.18rem;
+  color-scheme: light;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#151A20; --panel:#1D242C; --ink:#E6EAEE; --muted:#97A2AE; --line:#2F3944;
+    --pine:#6FB39F; --pine-ink:#0E1A16; --mark:#5A4A1C; --mark-ink:#FFF4D6; --warn:#E39A6B;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#151A20; --panel:#1D242C; --ink:#E6EAEE; --muted:#97A2AE; --line:#2F3944;
+  --pine:#6FB39F; --pine-ink:#0E1A16; --mark:#5A4A1C; --mark-ink:#FFF4D6; --warn:#E39A6B;
+  color-scheme: dark;
+}
+*,*::before,*::after{box-sizing:border-box}
+html{height:100%; scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0; min-height:100%; background:var(--bg); color:var(--ink); font-family:var(--sans); font-size:15px; line-height:1.45}
+button,input,select,textarea{font:inherit; color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--pine); outline-offset:2px}
+
+.app{max-width:1180px; margin:0 auto; padding:28px 20px 148px; display:grid; grid-template-columns:minmax(280px,380px) 1fr; gap:28px}
+@media (max-width:820px){ .app{grid-template-columns:1fr; padding-top:18px} }
+
+header.brand{grid-column:1/-1; display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap}
+.brand h1{font-family:var(--serif); font-weight:500; font-size:2.1rem; letter-spacing:-.01em; margin:0}
+.brand p{margin:2px 0 0; color:var(--muted)}
+.brand-actions{display:flex; gap:6px; align-items:center; flex-wrap:wrap}
+
+/* Add panel */
+.add{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:14px}
+.tabs{display:flex; gap:4px; margin-bottom:10px}
+.tabs button{border:0; background:transparent; padding:6px 10px; border-radius:8px; color:var(--muted)}
+.tabs button[aria-selected="true"]{background:var(--bg); color:var(--ink); font-weight:600}
+.add textarea,.add input{width:100%; border:1px solid var(--line); background:var(--bg); border-radius:10px; padding:10px 12px; resize:vertical}
+.add textarea{min-height:92px}
+.add .row{display:flex; gap:8px; margin-top:8px; align-items:center}
+.add .hint{color:var(--muted); font-size:.86rem; margin:8px 0 0}
+.btn{border:1px solid var(--line); background:transparent; border-radius:10px; padding:8px 14px}
+.btn.primary{background:var(--pine); color:var(--pine-ink); border-color:var(--pine); font-weight:600}
+.btn:disabled{opacity:.5; cursor:default}
+.btn.skip{padding:6px 10px; font-variant-numeric:tabular-nums}
+
+/* Queue */
+.queue h2{font-family:var(--serif); font-weight:500; font-size:1.25rem; margin:22px 0 4px}
+.queue .sum{color:var(--muted); font-size:.88rem; margin:0 0 10px}
+.libtabs{display:flex; flex-wrap:wrap; gap:6px; margin:8px 0}
+.guest{font-size:.85rem; color:var(--warn); margin:0 0 8px}
+.qrow{display:flex; flex-wrap:wrap; gap:6px; margin:8px 0}
+.qrow .btn{padding:6px 10px; font-size:.85rem}
+.btn[aria-pressed="true"]{border-color:var(--pine); color:var(--pine)}
+ol.list{list-style:none; margin:0; padding:0; counter-reset:q}
+ol.list li{counter-increment:q; display:grid; grid-template-columns:28px 1fr auto; gap:8px; align-items:start; padding:10px 8px; border-top:1px solid var(--line)}
+ol.list li::before{content:counter(q); font-family:var(--serif); font-size:1.1rem; color:var(--muted); text-align:right; padding-top:1px}
+ol.list li.current{background:var(--panel); border-radius:10px; border-top-color:transparent}
+ol.list li.current::before{color:var(--pine); font-weight:600}
+ol.list li.listened .t{color:var(--muted); text-decoration:line-through; text-decoration-color:var(--line)}
+ol.list li.blocked .t{color:var(--warn)}
+ol.list li.empty{display:block; counter-increment:none}
+ol.list li.empty::before{content:none}
+.item-main{border:0; background:none; text-align:left; padding:0; min-width:0}
+.item-main .t{display:block; font-weight:500; overflow-wrap:anywhere}
+.item-main .m{display:block; color:var(--muted); font-size:.82rem; margin-top:2px}
+.item-main .m.pending{color:var(--warn)}
+.bar{height:3px; background:var(--line); border-radius:2px; margin-top:6px; overflow:hidden}
+.bar i{display:block; height:100%; background:var(--pine)}
+.tools{display:flex; gap:2px}
+.icon{border:0; background:transparent; width:30px; height:30px; border-radius:8px; color:var(--muted); display:grid; place-items:center}
+.icon:hover{background:var(--bg); color:var(--ink)}
+.icon.on{color:var(--pine)}
+.icon:disabled{opacity:.35; cursor:default}
+.icon svg{width:16px; height:16px}
+.empty{color:var(--muted); padding:14px 0; border-top:1px solid var(--line)}
+
+/* Reader */
+.reader{background:var(--panel); border:1px solid var(--line); border-radius:18px; padding:34px clamp(20px,5vw,56px); min-height:60vh}
+.srcrow{display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap}
+.reader .src{color:var(--muted); font-size:.85rem; overflow-wrap:anywhere}
+.reader .src a{color:inherit}
+.reader h2{font-family:var(--serif); font-weight:500; font-size:clamp(1.6rem,3vw,2.3rem); line-height:1.15; margin:6px 0 22px; letter-spacing:-.01em}
+.prose{font-family:var(--serif); font-size:var(--read); line-height:1.7; max-width:66ch}
+.prose p{margin:0 0 1em}
+.prose span.s{cursor:pointer; border-radius:3px; transition:background .15s}
+.prose span.s:hover{background:color-mix(in srgb, var(--mark) 35%, transparent)}
+.prose span.s.on{background:var(--mark); color:var(--mark-ink); box-shadow:0 0 0 3px var(--mark)}
+.reader .blank{font-family:var(--serif); font-size:1.25rem; color:var(--muted); max-width:46ch}
+.reader .blank strong{color:var(--ink); font-weight:500}
+
+/* Transport */
+.transport{position:fixed; left:0; right:0; bottom:0; padding-bottom:env(safe-area-inset-bottom,0px); background:color-mix(in srgb, var(--panel) 92%, transparent); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); border-top:1px solid var(--line); z-index:5}
+.transport .in{max-width:1180px; margin:0 auto; padding:10px 20px 12px; display:flex; flex-direction:column; gap:8px}
+.trow{display:flex; align-items:center; gap:10px; flex-wrap:wrap}
+.play{width:46px; height:46px; border-radius:50%; border:0; background:var(--pine); color:var(--pine-ink); display:grid; place-items:center; flex:0 0 auto}
+.play svg{width:20px; height:20px}
+.now{flex:1 1 180px; min-width:0}
+.now .t{font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.now .m{color:var(--muted); font-size:.82rem}
+.sleepnote{color:var(--pine); font-size:.82rem; font-variant-numeric:tabular-nums}
+.sleepnote:empty{display:none}
+.scrub{width:100%; margin:0; accent-color:var(--pine); height:18px}
+.ctl{display:flex; align-items:center; gap:8px; color:var(--muted); font-size:.85rem}
+.ctl select{border:1px solid var(--line); background:var(--bg); border-radius:8px; padding:5px 8px; max-width:200px}
+.toast{position:fixed; left:50%; bottom:128px; transform:translateX(-50%); background:var(--ink); color:var(--bg); padding:8px 14px; border-radius:10px; font-size:.88rem; opacity:0; pointer-events:none; transition:opacity .2s; z-index:6; max-width:min(420px, calc(100% - 32px)); text-align:center}
+.toast.show{opacity:1}
+.drop{position:fixed; inset:12px; display:none; place-items:center; background:color-mix(in srgb, var(--bg) 86%, transparent); border:2px dashed var(--pine); border-radius:18px; z-index:8; font-family:var(--serif); font-size:1.7rem; pointer-events:none}
+.drop.on{display:grid}
+@media (prefers-reduced-motion: reduce){ *{transition:none!important} }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="brand">
+    <div>
+      <h1>Listen later</h1>
+      <p>Long reads, queued up and read aloud.</p>
+    </div>
+    <div class="brand-actions">
+      <button type="button" class="btn" id="fontDown" aria-label="Smaller text">A−</button>
+      <button type="button" class="btn" id="fontUp" aria-label="Larger text">A+</button>
+      <button type="button" class="btn" id="theme">System</button>
+    </div>
+  </header>
+
+  <aside>
+    <section class="add" aria-label="Add to queue">
+      <div class="tabs" role="tablist">
+        <button type="button" role="tab" aria-selected="true" data-tab="urls">Links</button>
+        <button type="button" role="tab" aria-selected="false" data-tab="text">Paste text</button>
+      </div>
+      <div data-pane="urls">
+        <textarea id="urls" placeholder="Paste links, one per line"></textarea>
+        <div class="row"><button type="button" class="btn primary" id="addUrls">Add links</button></div>
+        <p class="hint" id="hint"></p>
+      </div>
+      <div data-pane="text" hidden>
+        <input id="pTitle" placeholder="Title (optional)">
+        <textarea id="pText" placeholder="Paste the article text" style="margin-top:8px"></textarea>
+        <div class="row"><button type="button" class="btn primary" id="addText">Add text</button></div>
+      </div>
+    </section>
+
+    <section class="queue">
+      <h2>Library</h2>
+      <p class="sum" id="sum"></p>
+      <p class="guest" id="guestNote">Guest mode — up to 5 items on this device.</p>
+      <div class="libtabs" role="tablist" aria-label="Library filter">
+        <button type="button" class="btn" data-filter="active" aria-pressed="true">Up next</button>
+        <button type="button" class="btn" data-filter="in_progress" aria-pressed="false">In progress</button>
+        <button type="button" class="btn" data-filter="listened" aria-pressed="false">Listened</button>
+        <button type="button" class="btn" data-filter="archived" aria-pressed="false">Archive</button>
+      </div>
+      <div class="qrow">
+        <button type="button" class="btn" id="archiveListened">Archive listened</button>
+        <button type="button" class="btn" id="exportQ">Export</button>
+        <button type="button" class="btn" id="importQ">Import</button>
+        <input id="importFile" type="file" accept="application/json,.json" hidden>
+      </div>
+      <ol class="list" id="list"></ol>
+    </section>
+  </aside>
+
+  <main class="reader" id="reader" aria-live="polite"></main>
+</div>
+
+<div class="transport">
+  <div class="in">
+    <div class="trow">
+      <button type="button" class="icon" id="prev" aria-label="Previous article"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg></button>
+      <button type="button" class="btn skip" id="back30" aria-label="Back 30 seconds">−30s</button>
+      <button type="button" class="play" id="play" aria-label="Play"><svg viewBox="0 0 24 24" fill="currentColor" id="playIcon"><path d="M7 4v16l13-8z"/></svg></button>
+      <button type="button" class="btn skip" id="fwd15" aria-label="Forward 15 seconds">+15s</button>
+      <button type="button" class="icon" id="next" aria-label="Next article"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 5h2v14h-2zM4 5v14l11-7z"/></svg></button>
+      <div class="now">
+        <div class="t" id="nowT">Nothing playing</div>
+        <div class="m" id="nowM"></div>
+      </div>
+      <label class="ctl">Speed
+        <select id="rate">
+          <option value="0.85">0.85×</option><option value="1" selected>1×</option><option value="1.15">1.15×</option>
+          <option value="1.3">1.3×</option><option value="1.5">1.5×</option><option value="1.75">1.75×</option><option value="2">2×</option>
+        </select>
+      </label>
+      <label class="ctl">Voice <select id="voice"></select></label>
+      <label class="ctl">Sleep
+        <select id="sleep" aria-label="Sleep timer">
+          <option value="off">Off</option>
+          <option value="15">15 min</option>
+          <option value="30">30 min</option>
+          <option value="45">45 min</option>
+          <option value="end">End of piece</option>
+        </select>
+      </label>
+    </div>
+    <input id="scrub" class="scrub" type="range" min="0" max="0" value="0" step="1" aria-label="Position in this piece" disabled>
+    <div class="sleepnote" id="sleepNote"></div>
+  </div>
+</div>
+<div class="toast" id="toast" role="status"></div>
+<div class="drop" id="drop">Drop links, text, or a queue export</div>
+
+<script type="module">
+import {
+  GUEST_ITEM_LIMIT, migrateAll, canAddMore, activeItemCount, positionBetween,
+  classifyFetchError, blockedMessage, canonicalUrl
+} from './lib/model.js';
+import { toSentences, wordCount as words } from './lib/sentences.js';
+import { createAnalytics } from './lib/analytics.js';
+
+const $ = s => document.querySelector(s);
+const ICON = {
+  up:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 15l6-6 6 6"/></svg>',
+  down:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>',
+  del:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12"/></svg>',
+  check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L20 7"/></svg>',
+  play:'<path d="M7 4v16l13-8z"/>', pause:'<path d="M6 4h4v16H6zM14 4h4v16h-4z"/>'
+};
+const FONT_SIZES = ['1.02rem','1.18rem','1.36rem','1.56rem'];
+const ls = {
+  get(k,d){ try{ const v = localStorage.getItem(k); return v==null ? d : JSON.parse(v) }catch{ return d } },
+  set(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)) }catch{} }
+};
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove('show'),2600); }
+function esc(s){ return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function host(u){ try{ return new URL(u).hostname.replace(/^www\./,'') }catch{ return '' } }
+function mins(w, rate){ const m = Math.max(1, Math.round(w/(165*rate))); return m+' min'; }
+function newId(){ return 'l'+Date.now()+Math.random().toString(36).slice(2,6); }
+function itemUrl(it){ return it?.source_url || it?.url || ''; }
+function isReady(it){ return it?.status === 'ready' && !!it?.text; }
+function progressOf(it){ return it?.progress_sentence ?? it?.progress ?? 0; }
+const analytics = createAnalytics(ls);
+let listenStartedAt = 0;
+
+/* ---------- Appearance ---------- */
+let theme = ls.get('ll-theme', 'system');
+let fontIdx = Math.min(FONT_SIZES.length-1, Math.max(0, ls.get('ll-font', 1)|0));
+function applyTheme(){
+  const root = document.documentElement;
+  if(theme==='system') root.removeAttribute('data-theme');
+  else root.dataset.theme = theme;
+  const label = {system:'System', light:'Light', dark:'Dark'}[theme] || 'System';
+  $('#theme').textContent = label;
+  $('#theme').setAttribute('aria-label', `Theme ${label}. Click to change.`);
+}
+function applyFont(){ document.documentElement.style.setProperty('--read', FONT_SIZES[fontIdx]); }
+applyTheme(); applyFont();
+$('#theme').onclick = () => {
+  theme = theme==='system' ? 'light' : theme==='light' ? 'dark' : 'system';
+  ls.set('ll-theme', theme); applyTheme();
+};
+$('#fontDown').onclick = () => { if(fontIdx>0){ fontIdx--; ls.set('ll-font', fontIdx); applyFont(); } };
+$('#fontUp').onclick = () => { if(fontIdx<FONT_SIZES.length-1){ fontIdx++; ls.set('ll-font', fontIdx); applyFont(); } };
+
+/* ---------- Storage: local, with the Claude viewer store when it is available ---------- */
+let items = [];
+const store = {
+  mode:'local', col:null,
+  async init(onChange){
+    items = migrateAll(ls.get('ll-items', [])); onChange();
+    try{
+      const [db, user] = await Promise.all([claude.use('db'), claude.use('user')]);
+      const id = user ? await user.id() : null;
+      if(!db || !id) return;
+      this.col = db.collection('data/users/'+id);
+      this.mode = 'db';
+      this.col.onSnapshot(snap => {
+        items = migrateAll(snap.docs.map(d => ({ id:d.id, ...d.data() })));
+        onChange();
+      }, e => console.warn('db', e));
+    }catch(e){ console.warn('store', e); }
+  },
+  saveLocal(){ ls.set('ll-items', items); },
+  async add(data){
+    if(this.mode==='db'){ const {id, ...rest} = data; await this.col.add(rest); return; }
+    const id = data.id || newId();
+    items.push({ ...data, id }); this.saveLocal(); render();
+  },
+  async update(id, patch){
+    if(this.mode==='db'){ await this.col.doc(id).update(patch); return; }
+    const it = items.find(i=>i.id===id); if(it) Object.assign(it, patch); this.saveLocal(); render();
+  },
+  async remove(id){
+    if(this.mode==='db'){ await this.col.doc(id).delete(); return; }
+    items = items.filter(i=>i.id!==id); this.saveLocal(); render();
+  }
+};
+const sorted = () => [...items].sort((a,b)=>(a.position??0)-(b.position??0));
+const nextPosition = () => items.reduce((m,i)=>Math.max(m, i.position??0), 0) + 1;
+
+let libraryFilter = ls.get('ll-library-filter', 'active');
+function syncLibraryTabs(){
+  document.querySelectorAll('.libtabs [data-filter]').forEach(b => {
+    b.setAttribute('aria-pressed', b.dataset.filter === libraryFilter ? 'true' : 'false');
+  });
+}
+function visibleItems(){
+  const q = sorted();
+  switch(libraryFilter){
+    case 'in_progress': return q.filter(i => i.state === 'in_progress');
+    case 'listened': return q.filter(i => i.state === 'listened');
+    case 'archived': return q.filter(i => i.state === 'archived');
+    case 'active':
+    default: return q.filter(i => i.state === 'up_next' || i.state === 'in_progress' || (i.status !== 'ready' && i.state !== 'listened' && i.state !== 'archived'));
+  }
+}
+function updateGuestNote(){
+  const n = activeItemCount(items);
+  $('#guestNote').textContent = `Guest mode — ${n} of ${GUEST_ITEM_LIMIT} items on this device.`;
+}
+syncLibraryTabs();
+updateGuestNote();
+
+function newItem(partial){
+  return {
+    id: newId(),
+    source_url: '',
+    canonical_url: null,
+    source_channel: 'web',
+    title: '',
+    site_name: '',
+    text: '',
+    status: 'queued',
+    fail_reason: null,
+    state: 'up_next',
+    position: nextPosition(),
+    progress_sentence: 0,
+    listened_at: null,
+    addedAt: Date.now(),
+    ...partial,
+  };
+}
+
+/* ---------- Player ---------- */
+const synth = window.speechSynthesis;
+const player = { currentId: ls.get('ll-current', null), idx:0, sentences:[], playing:false, utter:null, lastSaved:0 };
+let rate = ls.get('ll-rate', 1);
+if([...$('#rate').options].some(o=>o.value===String(rate))) $('#rate').value = String(rate);
+let voices = [], voiceURI = ls.get('ll-voice', null);
+let scrubbing = false;
+let sleepMode = 'off', sleepUntil = 0, sleepTimer = 0, sleepTick = 0;
+
+function loadVoices(){
+  if(!synth) return;
+  voices = synth.getVoices().slice().sort((a,b)=>{
+    const ea = a.lang.startsWith('en')?0:1, eb = b.lang.startsWith('en')?0:1;
+    return ea-eb || a.lang.localeCompare(b.lang) || a.name.localeCompare(b.name);
+  });
+  if(!voiceURI || !voices.some(v=>v.voiceURI===voiceURI)){
+    const pick = voices.find(v=>v.lang==='en-IN') || voices.find(v=>v.lang==='en-GB') || voices.find(v=>v.lang.startsWith('en')) || voices[0];
+    voiceURI = pick?.voiceURI || null;
+  }
+  $('#voice').innerHTML = voices.map(v=>`<option value="${esc(v.voiceURI)}"${v.voiceURI===voiceURI?' selected':''}>${esc(v.name)} (${esc(v.lang)})</option>`).join('');
+}
+if(synth){ loadVoices(); synth.onvoiceschanged = loadVoices; }
+
+function current(){ return items.find(i=>i.id===player.currentId) || null; }
+
+function select(id, {autoplay=false}={}){
+  stop(false);
+  player.currentId = id; ls.set('ll-current', id);
+  const it = current();
+  player.sentences = it?.text ? toSentences(it.text) : [];
+  player.idx = Math.min(progressOf(it), Math.max(0, player.sentences.length-1));
+  if(it?.state === 'listened') player.idx = 0;
+  render();
+  if(autoplay && player.sentences.length) play();
+}
+
+function speakAt(i){
+  if(!synth) return;
+  if(i >= player.sentences.length){ finishItem(); return; }
+  player.idx = i; highlight();
+  const u = new SpeechSynthesisUtterance(player.sentences[i].s);
+  const v = voices.find(v=>v.voiceURI===voiceURI); if(v){ u.voice = v; u.lang = v.lang; }
+  u.rate = rate;
+  u.onend = () => { if(player.utter!==u || !player.playing) return; maybeSaveProgress(); speakAt(i+1); };
+  u.onerror = e => { if(e.error==='interrupted' || e.error==='canceled') return; player.playing=false; updateTransport(); toast('Speech stopped: '+e.error); };
+  player.utter = u;
+  synth.speak(u);
+}
+function play(){
+  if(!synth){ toast('This browser has no built-in speech'); return; }
+  const it = current();
+  if(!it){ const first = sorted().find(i=>isReady(i) && i.state !== 'listened') || sorted().find(i=>isReady(i)); if(first) select(first.id,{autoplay:true}); return; }
+  if(!player.sentences.length){ toast(it.text ? 'Nothing to read' : 'Still waiting for this article’s text'); return; }
+  if(it.state === 'up_next') store.update(it.id, { state:'in_progress' }).catch(()=>{});
+  player.playing = true; listenStartedAt = Date.now();
+  analytics.track('play_started', { source:'app', voice_tier:'device' });
+  synth.cancel(); speakAt(player.idx); updateTransport();
+}
+function stop(save=true){
+  player.playing = false; player.utter = null; if(synth) synth.cancel();
+  if(save) saveProgress(); updateTransport();
+}
+function toggle(){ player.playing ? stop() : play(); }
+
+function saveProgress(){
+  const it = current(); if(!it || !it.text || it.state === 'listened') return;
+  if(progressOf(it) === player.idx) return;
+  player.lastSaved = player.idx;
+  const patch = { progress_sentence: player.idx, progress_updated_at: Date.now() };
+  if(it.state === 'up_next' && player.idx > 0) patch.state = 'in_progress';
+  store.update(it.id, patch).catch(()=>{});
+}
+function maybeSaveProgress(){ if(player.idx - player.lastSaved >= 8) saveProgress(); }
+
+function finishItem(){
+  const it = current();
+  const stopHere = sleepMode==='end';
+  if(stopHere) cancelSleepClock();
+  if(it){
+    store.update(it.id, { state:'listened', progress_sentence:0, listened_at: Date.now() }).catch(()=>{});
+    analytics.track('item_listened', { channel: it.source_channel || 'web' });
+    if(listenStartedAt){ analytics.track('listening_minutes', { minutes: Math.max(1, Math.round((Date.now()-listenStartedAt)/60000)), voice_tier:'device' }); listenStartedAt = 0; }
+  }
+  if(stopHere){
+    sleepMode = 'off'; $('#sleep').value = 'off'; updateSleepNote();
+    player.playing = false; player.idx = 0; updateTransport();
+    toast('Stopped at the end of this piece');
+    render();
+    return;
+  }
+  const q = sorted(); const pos = q.findIndex(i=>i.id===player.currentId);
+  const nxt = q.slice(pos+1).find(i=>isReady(i) && i.state !== 'listened' && i.state !== 'archived');
+  if(nxt){ toast('Up next: '+(nxt.title||host(itemUrl(nxt))||'Untitled')); select(nxt.id,{autoplay:true}); }
+  else { player.playing=false; player.idx=0; updateTransport(); toast('Queue finished'); render(); }
+}
+function step(dir){
+  const q = sorted().filter(i=>isReady(i)); const pos = q.findIndex(i=>i.id===player.currentId);
+  const t = q[pos+dir]; if(t) select(t.id,{autoplay:player.playing});
+}
+function skipSeconds(seconds){
+  const sents = player.sentences;
+  if(!sents.length){ toast('Nothing to skip in'); return; }
+  const target = Math.max(8, Math.round((165/60)*rate*Math.abs(seconds)));
+  let w = 0, i = player.idx;
+  if(seconds>0){
+    while(i < sents.length-1 && w < target){ i++; w += words(sents[i].s); }
+  }else{
+    while(i > 0 && w < target){ i--; w += words(sents[i].s); }
+  }
+  player.idx = i; highlight(); saveProgress();
+  if(player.playing){ synth.cancel(); speakAt(player.idx); }
+}
+
+/* ---------- Sleep ---------- */
+function cancelSleepClock(){
+  clearTimeout(sleepTimer); clearInterval(sleepTick); sleepTimer = 0; sleepTick = 0; sleepUntil = 0;
+}
+function updateSleepNote(){
+  const el = $('#sleepNote');
+  if(sleepMode==='end'){ el.textContent = 'Stops when this piece ends'; return; }
+  if(sleepUntil){
+    const sec = Math.max(0, Math.round((sleepUntil-Date.now())/1000));
+    const m = Math.floor(sec/60), s = String(sec%60).padStart(2,'0');
+    el.textContent = `Sleep in ${m}:${s}`;
+    return;
+  }
+  el.textContent = '';
+}
+function clearSleep(){
+  cancelSleepClock(); sleepMode = 'off'; $('#sleep').value = 'off'; updateSleepNote();
+}
+function startSleep(minutes){
+  cancelSleepClock();
+  sleepMode = 'time';
+  sleepUntil = Date.now() + minutes*60000;
+  sleepTimer = setTimeout(() => {
+    cancelSleepClock(); sleepMode = 'off'; $('#sleep').value = 'off'; updateSleepNote();
+    if(player.playing) stop();
+    toast('Sleep timer');
+  }, minutes*60000);
+  sleepTick = setInterval(updateSleepNote, 1000);
+  updateSleepNote();
+}
+
+/* ---------- Listened ---------- */
+async function toggleListened(id){
+  const it = items.find(i=>i.id===id); if(!it || !isReady(it)) return;
+  const listened = it.state !== 'listened';
+  if(listened && id===player.currentId){
+    if(player.playing){ player.playing = false; player.utter = null; if(synth) synth.cancel(); }
+    player.idx = 0;
+  }
+  await store.update(id, {
+    state: listened ? 'listened' : 'up_next',
+    progress_sentence: listened ? 0 : progressOf(it),
+    listened_at: listened ? Date.now() : null,
+  }).catch(()=>{});
+  toast(listened ? 'Marked listened' : 'Back in Up next');
+  if(listened) analytics.track('item_listened', { channel: it.source_channel || 'web' });
+}
+async function archiveListened(){
+  const listened = items.filter(i=>i.state === 'listened');
+  if(!listened.length){ toast('Nothing listened yet'); return; }
+  const btn = $('#archiveListened');
+  if(btn.dataset.armed!=='1'){
+    btn.dataset.armed = '1'; btn.textContent = 'Confirm archive';
+    clearTimeout(btn._t);
+    btn._t = setTimeout(() => { btn.dataset.armed=''; btn.textContent='Archive listened'; }, 4000);
+    toast(`Click again to archive ${listened.length} listened`);
+    return;
+  }
+  btn.dataset.armed = ''; btn.textContent = 'Archive listened'; clearTimeout(btn._t);
+  for(const it of listened){
+    if(it.id===player.currentId){ stop(false); player.currentId=null; player.sentences=[]; readerKey=''; }
+    await store.update(it.id, { state:'archived' }).catch(()=>{});
+  }
+  toast(`Archived ${listened.length} listened`);
+}
+async function createShare(it){
+  if(!itemUrl(it)) return;
+  const token = Math.random().toString(36).slice(2,10);
+  const shares = ls.get('ll-shares', {});
+  shares[token] = { source_url: itemUrl(it), title: it.title || host(itemUrl(it)), created_at: Date.now() };
+  ls.set('ll-shares', shares);
+  const url = `${location.origin}${location.pathname.replace(/[^/]*$/, '')}share.html?t=${token}`;
+  try{ await navigator.clipboard.writeText(url); toast('Share link copied'); }
+  catch{ toast('Share link ready — copy from the address bar'); window.open(url, '_blank'); }
+  analytics.track('share_created', { channel: it.source_channel || 'web' });
+}
+
+/* ---------- Export / import ---------- */
+function exportQueue(){
+  const payload = { version:2, exportedAt: new Date().toISOString(), items: sorted().map(({id,source_url,canonical_url,source_channel,title,site_name,text,status,fail_reason,state,position,progress_sentence,listened_at,addedAt}) => ({id,source_url,canonical_url,source_channel,title,site_name,text,status,fail_reason,state,position,progress_sentence,listened_at,addedAt})) };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type:'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'listen-later.json';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+  toast(`Exported ${payload.items.length} item${payload.items.length===1?'':'s'}`);
+}
+function asItem(raw){
+  const row = migrateItem(raw);
+  if(!row) return null;
+  if(!row.source_url && words(row.text) < 5) return null;
+  if(row.text.length > 500000) return null;
+  if(row.text) row.status = 'ready';
+  return row;
+}
+async function importPayload(data){
+  const list = Array.isArray(data) ? data : (data && Array.isArray(data.items) ? data.items : null);
+  if(!list){ toast('That file isn’t a Listen later queue'); return; }
+  let added = 0, updated = 0, skipped = 0;
+  for(const raw of list){
+    const row = asItem(raw);
+    if(!row){ skipped++; continue; }
+    const existing = (row.id && items.find(i=>i.id===row.id)) || (row.canonical_url && items.find(i=>i.canonical_url===row.canonical_url));
+    if(existing){
+      const patch = {};
+      if(!existing.text && row.text){ patch.text = row.text; patch.status = 'ready'; }
+      if(!existing.title && row.title) patch.title = row.title;
+      if(Object.keys(patch).length){ updated++; await store.update(existing.id, patch).catch(()=>{}); }
+      else skipped++;
+      continue;
+    }
+    if(!canAddMore(items)){ skipped++; continue; }
+    added++;
+    row.position = nextPosition();
+    await store.add({ ...row, id: row.id || newId() }).catch(()=>{});
+  }
+  updateGuestNote();
+  toast(`Imported ${added}` + (updated?`, updated ${updated}`:'') + (skipped?`, skipped ${skipped}`:''));
+}
+
+/* ---------- Auto-fetch ---------- */
+const CAN_FETCH = !window.claude;
+const fetching = new Set();
+$('#hint').textContent = CAN_FETCH
+  ? 'Paste links or drop them on the page. Each one is fetched and cleaned up for listening.'
+  : 'Then tell Claude in chat: “fetch my listening queue”. Claude pulls each article and drops the text in here.';
+function cleanMarkdown(md){
+  return md
+    .replace(/```[\s\S]*?```/g,'')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g,'')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g,'$1')
+    .replace(/^#{1,6}\s*/gm,'')
+    .replace(/^\s*[-*+]\s+/gm,'')
+    .replace(/[*_`>]{1,3}/g,'')
+    .replace(/^\s*[=-]{3,}\s*$/gm,'')
+    .split('\n').map(l=>l.trim())
+    .filter(l => !l || l.split(/\s+/).length >= 5 || /[.!?:]$/.test(l))
+    .join('\n').replace(/\n{3,}/g,'\n\n').trim();
+}
+async function autoFetch(it){
+  fetching.add(it.id);
+  await store.update(it.id, { status:'extracting', fail_reason:null }).catch(()=>{});
+  render();
+  const started = Date.now();
+  try{
+    const url = itemUrl(it);
+    const r = await fetch('https://r.jina.ai/' + url, { headers:{ 'X-Return-Format':'markdown' } });
+    const raw = await r.text();
+    const title = ((raw.match(/^Title:\s*(.+)$/m)||[])[1]||'').trim();
+    const body = raw.includes('Markdown Content:') ? raw.split('Markdown Content:').slice(1).join(' ') : raw;
+    const text = cleanMarkdown(body);
+    if(!r.ok) throw Object.assign(new Error('http'), { status: r.status, preview: text.slice(0,400) });
+    if(words(text) < 60) throw Object.assign(new Error('short'), { status: r.status, preview: text.slice(0,400) });
+    await store.update(it.id, {
+      title: it.title || title,
+      site_name: host(url),
+      text,
+      status:'ready',
+      fail_reason:null,
+      lang: 'en',
+    });
+    analytics.track('item_ready', { latency_ms: Date.now()-started, channel: it.source_channel || 'web' });
+    toast('Ready: ' + (title || host(url)));
+  }catch(e){
+    const cls = classifyFetchError(e.message, e.status, e.preview || '');
+    await store.update(it.id, { status: cls.status, fail_reason: cls.fail_reason }).catch(()=>{});
+    analytics.track('item_failed', { reason: cls.fail_reason, channel: it.source_channel || 'web' });
+  }
+  fetching.delete(it.id); render();
+}
+function autoFetchPending(){
+  if(!CAN_FETCH) return;
+  items.filter(i => itemUrl(i) && i.status !== 'ready' && i.status !== 'blocked' && !fetching.has(i.id) && (i.status === 'queued' || i.status === 'failed')).forEach(autoFetch);
+}
+
+/* ---------- Rendering ---------- */
+function statusLabel(it){
+  if(it.status === 'extracting' || fetching.has(it.id)) return 'Extracting…';
+  if(it.status === 'queued') return 'Queued';
+  if(it.status === 'blocked') return 'Blocked — tap for options';
+  if(it.status === 'failed') return 'Failed — tap to retry';
+  return '';
+}
+function render(){
+  const q = sorted();
+  const shown = visibleItems();
+  const ready = q.filter(i=>isReady(i) && i.state !== 'listened' && i.state !== 'archived');
+  const pend = q.filter(i=>i.status !== 'ready' && i.state !== 'archived').length;
+  const w = ready.reduce((s,i)=>s+words(i.text),0);
+  $('#sum').textContent = q.length
+    ? `${ready.length} up next · about ${mins(w, rate)}` + (pend ? ` · ${pend} preparing` : '')
+    : '';
+  updateGuestNote();
+  const emptyMsg = !q.length
+    ? 'Your library is empty. Add links or paste an article to start.'
+    : 'Nothing in this view. Try another library tab.';
+  $('#list').innerHTML = shown.length ? shown.map((it,k) => {
+    const n = it.text ? toSentencesCount(it) : 0;
+    const prog = progressOf(it);
+    const pct = it.state === 'listened' ? 100 : (n ? Math.round(100*prog/n) : 0);
+    const meta = !isReady(it)
+      ? `<span class="m pending">${!CAN_FETCH && it.status === 'queued' ? 'Waiting for text — ask Claude to fetch' : esc(statusLabel(it))}</span>`
+      : `<span class="m">${esc(it.site_name || host(itemUrl(it))||'Pasted text')} · ${mins(words(it.text), rate)}${it.state==='listened'?' · listened':''}${it.state==='in_progress'?' · in progress':''}</span>`;
+    return `<li class="${it.id===player.currentId?'current':''} ${it.state==='listened'?'listened':''} ${it.status==='blocked'?'blocked':''}" data-id="${esc(it.id)}">
+      <button type="button" class="item-main" data-act="open"><span class="t">${esc(it.title || host(itemUrl(it)) || 'Untitled')}</span>${meta}${isReady(it) && pct>0 && it.state !== 'listened' ? `<span class="bar"><i style="width:${pct}%"></i></span>`:''}</button>
+      <span class="tools">
+        <button type="button" class="icon" data-act="up" aria-label="Move up" ${k===0?'disabled':''}>${ICON.up}</button>
+        <button type="button" class="icon" data-act="down" aria-label="Move down" ${k===shown.length-1?'disabled':''}>${ICON.down}</button>
+        <button type="button" class="icon${it.state==='listened'?' on':''}" data-act="done" aria-label="${it.state==='listened'?'Mark to listen':'Mark listened'}" ${isReady(it)?'':'disabled'}>${ICON.check}</button>
+        <button type="button" class="icon" data-act="del" aria-label="Remove">${ICON.del}</button>
+      </span></li>`;
+  }).join('') : `<li class="empty">${emptyMsg}</li>`;
+  renderReader();
+  updateTransport();
+  queueMicrotask(autoFetchPending);
+}
+const countCache = new Map();
+function toSentencesCount(it){
+  const k = it.id+':'+(it.text||'').length;
+  if(!countCache.has(k)) countCache.set(k, toSentences(it.text).length);
+  return countCache.get(k);
+}
+let readerKey = '';
+function renderReader(){
+  const it = current(); const r = $('#reader');
+  const key = it ? it.id+':'+(it.text||'').length+':'+it.state+':'+it.status+':'+(fetching.has(it.id)?'f':'') : 'none';
+  if(key === readerKey){ highlight(); return; }
+  readerKey = key;
+  if(it && it.text && !player.sentences.length) player.sentences = toSentences(it.text);
+  if(!it){
+    r.innerHTML = `<p class="blank"><strong>Pick something from the library</strong>, or press play to start from the top. Space plays and pauses. Arrow keys move a sentence; shift plus an arrow skips about 15 or 30 seconds.</p>`;
+    return;
+  }
+  const url = itemUrl(it);
+  const src = url ? `<div class="src"><a href="${esc(url)}" target="_blank" rel="noopener">${esc(host(url))}</a></div>` : '<div class="src">Pasted text</div>';
+  const actions = [];
+  if(isReady(it)) actions.push(`<button type="button" class="btn" data-act="toggle-done">${it.state==='listened'?'Mark to listen':'Mark listened'}</button>`);
+  if(isReady(it) && url) actions.push(`<button type="button" class="btn" data-act="share">Share link</button>`);
+  const mark = actions.join('');
+  if(!isReady(it)){
+    let msg = !CAN_FETCH ? 'This link hasn’t been fetched yet. In chat, ask Claude to <strong>fetch my listening queue</strong> and the article will land here.'
+      : fetching.has(it.id) || it.status === 'extracting' ? 'Extracting and cleaning the article for listening…'
+      : 'Queued for extraction.';
+    if(it.status === 'blocked' || it.status === 'failed'){
+      const b = blockedMessage(it.fail_reason || 'network_error');
+      msg = `<strong>${esc(b.title)}</strong> ${esc(b.body)}` + (url ? ` <a href="${esc(url)}" target="_blank" rel="noopener">Open in browser</a>` : '');
+    }
+    r.innerHTML = `<div class="srcrow">${src}</div><h2>${esc(it.title||url||'Untitled')}</h2><p class="blank">${msg}</p>`;
+    return;
+  }
+  let html = '', p = -1;
+  player.sentences.forEach((s,i) => {
+    if(s.p !== p){ if(p>=0) html += '</p>'; html += '<p>'; p = s.p; }
+    html += `<span class="s" data-i="${i}">${esc(s.s)}</span> `;
+  });
+  r.innerHTML = `<div class="srcrow">${src}${mark}</div><h2>${esc(it.title||'Untitled')}</h2><div class="prose">${html}</p></div>`;
+  highlight();
+}
+function highlight(){
+  document.querySelectorAll('.prose span.s.on').forEach(e=>e.classList.remove('on'));
+  const el = document.querySelector(`.prose span.s[data-i="${player.idx}"]`);
+  if(el){ el.classList.add('on'); if(player.playing){ const b = el.getBoundingClientRect(); if(b.top < 80 || b.bottom > innerHeight-160) el.scrollIntoView({block:'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'}); } }
+  updateTransport();
+}
+function updateTransport(){
+  $('#playIcon').innerHTML = player.playing ? ICON.pause : ICON.play;
+  $('#play').setAttribute('aria-label', player.playing ? 'Pause' : 'Play');
+  const it = current();
+  const title = it ? (it.title || host(itemUrl(it)) || 'Untitled') : '';
+  $('#nowT').textContent = it ? title : 'Nothing playing';
+  const n = player.sentences.length;
+  $('#nowM').textContent = it && n ? `Sentence ${Math.min(player.idx, n-1)+1} of ${n} · ${mins(Math.round(words(it.text)*(1-(Math.min(player.idx,n-1)/n))), rate)} left` : '';
+  document.title = it && player.playing ? `${title} · Listen later` : 'Listen later';
+  const scrub = $('#scrub');
+  const canSeek = n > 1;
+  $('#back30').disabled = !canSeek;
+  $('#fwd15').disabled = !canSeek;
+  scrub.disabled = !n;
+  scrub.max = String(Math.max(0, n-1));
+  if(!scrubbing) scrub.value = String(Math.min(player.idx, Math.max(0, n-1)));
+  if(n) scrub.setAttribute('aria-valuetext', `Sentence ${Math.min(player.idx, n-1)+1} of ${n}`);
+  updateSleepNote();
+  if('mediaSession' in navigator){
+    try{
+      navigator.mediaSession.playbackState = player.playing ? 'playing' : 'paused';
+      if(it) navigator.mediaSession.metadata = new MediaMetadata({ title: title || 'Listen later', artist:'Listen later', album: host(itemUrl(it)) || 'Library' });
+      if(n) navigator.mediaSession.setPositionState({ duration:n, playbackRate: rate || 1, position: Math.min(player.idx, n) });
+    }catch{}
+  }
+}
+function bindMedia(){
+  if(!('mediaSession' in navigator)) return;
+  const set = (action, fn) => { try{ navigator.mediaSession.setActionHandler(action, fn); }catch{} };
+  set('play', () => play());
+  set('pause', () => stop());
+  set('previoustrack', () => step(-1));
+  set('nexttrack', () => step(1));
+  set('seekbackward', () => skipSeconds(-30));
+  set('seekforward', () => skipSeconds(15));
+}
+bindMedia();
+
+/* ---------- Drop ---------- */
+let dragDepth = 0;
+function wantsDrop(e){
+  const t = [...(e.dataTransfer?.types||[])];
+  return t.includes('Files') || t.includes('text/uri-list');
+}
+addEventListener('dragenter', e => { if(!wantsDrop(e)) return; dragDepth++; $('#drop').classList.add('on'); });
+addEventListener('dragleave', () => { dragDepth = Math.max(0, dragDepth-1); if(!dragDepth) $('#drop').classList.remove('on'); });
+addEventListener('dragover', e => { if(wantsDrop(e)){ e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } });
+addEventListener('drop', async e => {
+  if(!wantsDrop(e)) return;
+  e.preventDefault(); dragDepth = 0; $('#drop').classList.remove('on');
+  const files = [...(e.dataTransfer.files||[])];
+  if(files.length){
+    for(const file of files) await takeFile(file);
+    return;
+  }
+  const raw = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain') || '';
+  const urls = raw.match(/https?:\/\/[^\s<>"']+/g) || [];
+  if(!urls.length){ toast('Drop a link, a text file, or a queue export'); return; }
+  await addUrls(urls);
+});
+async function takeFile(file){
+  const name = file.name || 'Dropped file';
+  if(/\.json$/i.test(name) || file.type==='application/json'){
+    try{ await importPayload(JSON.parse(await file.text())); }
+    catch{ toast('Couldn’t read that export'); }
+    return;
+  }
+  if(!/\.(txt|md|markdown)$/i.test(name) && !/^text\//.test(file.type)){ toast('Drop a .txt, .md, or queue .json file'); return; }
+  const text = (await file.text()).trim();
+  if(words(text) < 5){ toast('That file doesn’t have enough text'); return; }
+  if(text.length > 500000){ toast('That file is too long to store in this browser'); return; }
+  const title = name.replace(/\.(txt|md|markdown)$/i,'');
+  if(!canAddMore(items)){ toast(`Guest limit: ${GUEST_ITEM_LIMIT} items`); return; }
+  await store.add(newItem({ source_channel:'paste', title, text, status:'ready', site_name:'Pasted text' })).catch(()=>{});
+  analytics.track('item_saved', { channel:'paste' });
+  toast('Added '+title);
+  updateGuestNote();
+}
+async function addUrls(list){
+  const have = new Set(items.map(i=>i.canonical_url || canonicalUrl(itemUrl(i))).filter(Boolean));
+  const fresh = [...new Set(list)].filter(u=>!have.has(canonicalUrl(u)));
+  if(!fresh.length){ toast(list.length ? 'Those links are already queued' : 'Paste at least one link starting with http'); return 0; }
+  if(!canAddMore(items)){ toast(`Guest limit: ${GUEST_ITEM_LIMIT} items`); return 0; }
+  let added = 0;
+  for(const url of fresh){
+    if(!canAddMore(items)) break;
+    await store.add(newItem({ source_url:url, canonical_url:canonicalUrl(url), source_channel:'web', status:'queued' })).catch(()=>{});
+    analytics.track('item_saved', { channel:'web' });
+    added++;
+  }
+  if(added) toast(`Added ${added} link${added>1?'s':''}`);
+  updateGuestNote();
+  return added;
+}
+
+/* ---------- Events ---------- */
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('.tabs button').forEach(x=>x.setAttribute('aria-selected', x===b));
+  document.querySelectorAll('[data-pane]').forEach(p=>p.hidden = p.dataset.pane !== b.dataset.tab);
+});
+$('#addUrls').onclick = async () => {
+  const raw = $('#urls').value.match(/https?:\/\/[^\s<>"']+/g) || [];
+  const n = await addUrls(raw);
+  if(n) $('#urls').value = '';
+};
+$('#addText').onclick = async () => {
+  const text = $('#pText').value.trim();
+  if(words(text) < 5){ toast('Paste some text first'); return; }
+  if(text.length > 500000){ toast('That text is too long to store in this browser'); return; }
+  const title = $('#pTitle').value.trim() || text.split(/\n/)[0].slice(0,80);
+  if(!canAddMore(items)){ toast(`Guest limit: ${GUEST_ITEM_LIMIT} items`); return; }
+  await store.add(newItem({ source_channel:'paste', title, text, status:'ready', site_name:'Pasted text' })).catch(()=>{});
+  analytics.track('item_saved', { channel:'paste' });
+  $('#pText').value=''; $('#pTitle').value=''; toast('Added to library');
+  updateGuestNote();
+};
+document.querySelectorAll('.libtabs [data-filter]').forEach(b => b.onclick = () => {
+  libraryFilter = b.dataset.filter;
+  ls.set('ll-library-filter', libraryFilter);
+  syncLibraryTabs();
+  render();
+});
+$('#archiveListened').onclick = () => archiveListened();
+$('#exportQ').onclick = () => exportQueue();
+$('#importQ').onclick = () => $('#importFile').click();
+$('#importFile').onchange = async e => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if(!file) return;
+  try{ await importPayload(JSON.parse(await file.text())); }
+  catch{ toast('Couldn’t read that export'); }
+};
+$('#list').onclick = async e => {
+  const b = e.target.closest('[data-act]'); if(!b) return;
+  const li = b.closest('li'); if(!li || !li.dataset.id) return;
+  const id = li.dataset.id; const act = b.dataset.act;
+  if(act==='open'){
+    const it = items.find(i=>i.id===id);
+    if(it && (it.status==='blocked' || it.status==='failed')) await store.update(id, { status:'queued', fail_reason:null }).catch(()=>{});
+    select(id, {autoplay: player.playing}); return;
+  }
+  if(act==='done'){ await toggleListened(id); return; }
+  if(act==='del'){ if(id===player.currentId){ stop(false); player.currentId=null; player.sentences=[]; readerKey=''; } await store.remove(id).catch(()=>{}); toast('Removed'); return; }
+  const shown = visibleItems(); const k = shown.findIndex(i=>i.id===id); const j = act==='up' ? k-1 : k+1;
+  if(j<0 || j>=shown.length) return;
+  const a = shown[k], c = shown[j];
+  const all = sorted();
+  const ai = all.findIndex(i=>i.id===a.id), ci = all.findIndex(i=>i.id===c.id);
+  const pos = positionBetween(act==='up' ? all[ai-1]?.position : all[ci]?.position, act==='up' ? all[ci]?.position : all[ai+1]?.position);
+  await store.update(a.id, { position: pos }).catch(()=>{});
+};
+$('#reader').onclick = e => {
+  const act = e.target.closest('[data-act]');
+  if(act && act.dataset.act==='toggle-done'){ const it = current(); if(it) toggleListened(it.id); return; }
+  if(act && act.dataset.act==='share'){ const it = current(); if(it) createShare(it); return; }
+  const s = e.target.closest('span.s'); if(!s) return;
+  player.idx = +s.dataset.i; highlight(); saveProgress();
+  if(player.playing){ synth.cancel(); speakAt(player.idx); }
+};
+$('#play').onclick = toggle;
+$('#prev').onclick = () => step(-1);
+$('#next').onclick = () => step(1);
+$('#back30').onclick = () => skipSeconds(-30);
+$('#fwd15').onclick = () => skipSeconds(15);
+$('#rate').onchange = e => { rate = +e.target.value; ls.set('ll-rate', rate); if(player.playing){ synth.cancel(); speakAt(player.idx); } render(); };
+$('#voice').onchange = e => { voiceURI = e.target.value; ls.set('ll-voice', voiceURI); if(player.playing){ synth.cancel(); speakAt(player.idx); } };
+$('#sleep').onchange = e => {
+  const v = e.target.value;
+  if(v==='off'){ clearSleep(); toast('Sleep timer off'); return; }
+  if(v==='end'){
+    cancelSleepClock(); sleepMode = 'end'; updateSleepNote();
+    toast('Will stop at the end of this piece');
+    return;
+  }
+  startSleep(+v);
+  toast(`Sleep timer, ${v} minutes`);
+};
+$('#scrub').onpointerdown = () => { scrubbing = true; };
+$('#scrub').oninput = () => {
+  scrubbing = true;
+  if(!player.sentences.length) return;
+  player.idx = +$('#scrub').value;
+  highlight();
+};
+$('#scrub').onchange = () => {
+  scrubbing = false;
+  if(!player.sentences.length) return;
+  player.idx = +$('#scrub').value;
+  saveProgress();
+  if(player.playing){ synth.cancel(); speakAt(player.idx); }
+  else highlight();
+};
+document.addEventListener('keydown', e => {
+  if(e.target.closest('input,textarea,select')) return;
+  if(e.metaKey || e.ctrlKey || e.altKey) return;
+  if(e.code==='Space'){ e.preventDefault(); toggle(); }
+  if(e.key==='ArrowRight' && e.shiftKey && player.sentences.length){ e.preventDefault(); skipSeconds(15); return; }
+  if(e.key==='ArrowLeft' && e.shiftKey && player.sentences.length){ e.preventDefault(); skipSeconds(-30); return; }
+  if(e.key==='ArrowRight' && player.sentences.length){ player.idx=Math.min(player.idx+1, player.sentences.length-1); highlight(); saveProgress(); if(player.playing){ synth.cancel(); speakAt(player.idx);} }
+  if(e.key==='ArrowLeft' && player.sentences.length){ player.idx=Math.max(player.idx-1,0); highlight(); saveProgress(); if(player.playing){ synth.cancel(); speakAt(player.idx);} }
+  if((e.key==='d' || e.key==='D') && current()?.text){ e.preventDefault(); toggleListened(player.currentId); }
+});
+addEventListener('pagehide', () => { if(current() && current().state !== 'listened') saveProgress(); });
+
+store.init(() => {
+  const it = current();
+  if(it && it.text && !player.sentences.length){
+    player.sentences = toSentences(it.text);
+    player.idx = Math.min(progressOf(it), Math.max(0, player.sentences.length-1));
+    if(it.state === 'listened') player.idx = 0;
+  }
+  if(player.currentId && !it && store.mode==='db' && items.length) { player.currentId = null; }
+  render();
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Listen later — shared link</title>
+<style>
+  body{font-family:system-ui,sans-serif;max-width:40rem;margin:3rem auto;padding:0 1.25rem;line-height:1.5;color:#1b2430}
+  h1{font-weight:600;font-size:1.5rem}
+  .muted{color:#5d6875}
+  a{color:#2e5e52}
+  .btn{display:inline-block;margin-top:1rem;padding:.6rem 1rem;border-radius:10px;background:#2e5e52;color:#fff;text-decoration:none;font-weight:600}
+</style>
+</head>
+<body>
+<h1 id="title">Shared article</h1>
+<p class="muted" id="sub"></p>
+<p><a id="open" href="#" rel="noopener">Open original</a></p>
+<a class="btn" href="./">Save to Listen later</a>
+<script>
+const token = new URLSearchParams(location.search).get('t');
+const shares = JSON.parse(localStorage.getItem('ll-shares') || '{}');
+const row = token && shares[token];
+if (!row) {
+  document.getElementById('title').textContent = 'Share not found';
+  document.getElementById('sub').textContent = 'This link may have expired or was opened on another device.';
+  document.getElementById('open').hidden = true;
+} else {
+  document.getElementById('title').textContent = row.title || 'Article';
+  document.getElementById('sub').textContent = 'Public shares include the original link only — not a copy of the article text.';
+  const a = document.getElementById('open');
+  a.href = row.source_url;
+  a.textContent = row.source_url;
+}
+</script>
+</body>
+</html>
