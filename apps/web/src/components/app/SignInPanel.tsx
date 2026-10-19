@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { authLogin, authPin, authStart, authVerify, api } from '@/lib/api';
 import { fetchSite, type SiteConfig } from '@/lib/site';
 
@@ -135,7 +136,7 @@ export function SignInPanel({
         <h2 id="signin-title">Sign in</h2>
         {locked ? (
           <p className="fine">
-            Sign in to open your library. <a href="/">Back to the site</a>
+            Sign in to open your library. <Link href="/">Back to the site</Link>
           </p>
         ) : null}
         {step === 'choose' ? (
