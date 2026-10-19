@@ -86,6 +86,12 @@ function voiceChoices(all: SpeechSynthesisVoice[]) {
   return out;
 }
 
+function authFailed(err: unknown) {
+  const status = (err as { status?: number }).status;
+  const code = (err as { detail?: { error?: string } }).detail?.error;
+  return status === 401 || code === 'invalid_token' || code === 'missing_bearer' || code === 'sign_in_required';
+}
+
 function hostOf(url: string) {
   try {
     return new URL(url).hostname.replace(/^www\./, '');
@@ -304,7 +310,13 @@ export function AppShell() {
       return;
     }
     fetch(`${apiBase()}/v1/me/plan`, { headers: { Authorization: `Bearer ${bearer}` } })
-      .then((res) => (res.ok ? res.json() : null))
+      .then((res) => {
+        if (res.status === 401) {
+          signOut();
+          return null;
+        }
+        return res.ok ? res.json() : null;
+      })
       .then((data: { plan?: string; free_listen_seconds?: number } | null) => {
         if (!data) return;
         if (data.plan === 'plus' || data.plan === 'premium') {
@@ -552,8 +564,8 @@ export function AppShell() {
         }
       }
       real.filter((item) => item.status === 'queued' || item.status === 'extracting').forEach((item) => follow(item.id));
-    } catch {
-      /* keep the list already on screen */
+    } catch (err) {
+      if (authFailed(err)) signOut();
     }
   }
 
@@ -614,6 +626,11 @@ export function AppShell() {
       if (!created.length) note('Nothing new was saved');
     } catch (err) {
       const code = (err as { detail?: { error?: string } }).detail?.error;
+      if (authFailed(err)) {
+        setItems((list) => list.filter((item) => !stamps.some((stamp) => stamp.id === item.id)));
+        signOut();
+        return;
+      }
       setItems((list) =>
         list.map((item) =>
           stamps.some((stamp) => stamp.id === item.id)
@@ -825,7 +842,7 @@ export function AppShell() {
                   key={item.id}
                   tone="warn"
                   title={copy.title}
-                  body={`${kindName(sourceKind(item))}. ${item.title}. ${copy.body}`}
+                  body={item.title ? `${item.title}. ${copy.body}` : copy.body}
                   actions={[
                     { label: 'Open in browser', onClick: () => item.source_url && window.open(item.source_url, '_blank', 'noopener') },
                     { label: 'Dismiss', onClick: () => setItems((list) => list.filter((entry) => entry.id !== item.id)) },
