@@ -511,6 +511,21 @@
 }
 .now-read .prose p { margin: 0 0 1.45em; }
 .now-read .prose p:first-of-type { font-style: italic; }
+.now-read .prose p.headline {
+  font-style: normal;
+  font-weight: 500;
+  font-size: 1.55rem;
+  letter-spacing: -0.02em;
+  line-height: 1.22;
+  margin: 1.55em 0 0.55em;
+}
+.now-read .prose p.headline:first-of-type {
+  margin-top: 0;
+  font-size: clamp(2.15rem, 2.8vw, 2.85rem);
+  letter-spacing: -0.025em;
+  line-height: 1.12;
+}
+.now-read .prose p.headline + p { font-style: italic; }
 .now-read .prose .s.on {
   background: #f3e7a1;
   color: inherit;

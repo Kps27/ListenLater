@@ -1,3 +1,10 @@
+function isHeadline(group: string[]) {
+  if (group.length !== 1) return false;
+  const line = group[0].trim();
+  const words = line.split(/\s+/).filter(Boolean).length;
+  return words > 0 && words <= 14 && line.length >= 4 && !/[.]$/.test(line);
+}
+
 export function SentenceHighlighter({
   sentences,
   paragraphs,
@@ -15,7 +22,7 @@ export function SentenceHighlighter({
   return (
     <div className="prose">
       {groups.map((group, gi) => (
-        <p key={gi}>
+        <p key={gi} className={isHeadline(group) ? 'headline' : undefined}>
           {group.map((sentence) => {
             const i = cursor++;
             return (

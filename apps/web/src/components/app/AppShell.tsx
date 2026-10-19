@@ -178,13 +178,26 @@ function alignSentences(chunks: string[], sentences: string[]) {
   return filled.length ? filled : [sentences];
 }
 
+function withHeadline(title: string, sentences: string[], paragraphs: string[][]) {
+  const lines = title.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  const first = (sentences[0] || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  const extra = lines.filter((line) => {
+    const name = line.replace(/\s+/g, ' ').trim().toLowerCase();
+    return Boolean(name) && first !== name && !first.startsWith(`${name} `) && !first.startsWith(`${name}.`);
+  });
+  if (!extra.length) return { sentences, paragraphs };
+  return { sentences: [...extra, ...sentences], paragraphs: [extra, ...paragraphs] };
+}
+
 function applyRow(row: Record<string, unknown>): Item {
   const url = String(row.source_url || '');
   const site = String(row.site_name || hostOf(url) || 'Saved');
-  const reading = readingFrom(row);
+  const title = String(row.title || site);
+  const read = readingFrom(row);
+  const reading = withHeadline(title, read.sentences, read.paragraphs);
   return {
     id: String(row.id),
-    title: String(row.title || site),
+    title,
     site_name: site,
     source_url: url,
     source_channel: (row.source_channel as Item['source_channel']) || 'web',
