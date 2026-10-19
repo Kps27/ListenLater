@@ -93,10 +93,22 @@ export async function fetchSite(): Promise<SiteConfig> {
   }
 }
 
+function devApiFor(host: string) {
+  if (!host || host === 'localhost' || host === '127.0.0.1') return null;
+  if (host.endsWith('.local')) return `http://${host}:3333`;
+  const parts = host.split('.');
+  if (parts.length !== 4) return null;
+  const nums = parts.map((part) => Number(part));
+  if (nums.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return null;
+  const [a, b] = nums;
+  const lan = a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
+  return lan ? `http://${host}:3333` : null;
+}
+
 export function apiBase() {
   if (typeof window !== 'undefined') {
-    const host = window.location.hostname;
-    if (host && host !== 'localhost' && host !== '127.0.0.1') return `http://${host}:3333`;
+    const dev = devApiFor(window.location.hostname);
+    if (dev) return dev;
   }
   return DEFAULT_BASE;
 }
