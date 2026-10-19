@@ -83,9 +83,9 @@ test('country prices stay on round local amounts', () => {
   assert.equal(india.year_cents, 100000);
   assert.equal(india.save_percent, 58);
   const us = quoteCountry('US');
-  assert.equal(us.month_cents, 200);
+  assert.equal(us.month_cents, 100);
   assert.equal(us.year_cents, 1000);
-  assert.equal(us.save_percent, 58);
+  assert.equal(us.save_percent, 17);
 });
 
 test('demo checkout uses the signed-in country price and does not charge', () => {

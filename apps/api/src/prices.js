@@ -1,5 +1,5 @@
 const BOOK = {
-  US: { currency: 'USD', month_cents: 200, year_cents: 1000 },
+  US: { currency: 'USD', month_cents: 100, year_cents: 1000 },
   IN: { currency: 'INR', month_cents: 20000, year_cents: 100000 },
   GB: { currency: 'GBP', month_cents: 200, year_cents: 1000 },
   EU: { currency: 'EUR', month_cents: 200, year_cents: 1000 },

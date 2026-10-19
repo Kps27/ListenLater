@@ -52,7 +52,7 @@ export const DEFAULT_SITE: SiteConfig = {
     linkedin: 'https://www.linkedin.com',
     github: 'https://github.com/Kps27/ListenLater',
   },
-  prices: { month_cents: 200, year_cents: 1000, currency: 'USD' },
+  prices: { month_cents: 100, year_cents: 1000, currency: 'USD' },
   free_listen_seconds: 60,
   payment: { provider: 'stripe', stripe_publishable_key: '', razorpay_key_id: '' },
   auth: { email: true, google: false, apple: false, mail: false },

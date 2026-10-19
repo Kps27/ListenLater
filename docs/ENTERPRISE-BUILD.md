@@ -5,7 +5,7 @@ Full handoff MVP + enterprise delivery (no milestone gates). Status as of Oct 20
 | Feature | Status | Location |
 | --- | --- | --- |
 | REST API §5 | Mostly done | `apps/api` — premium `/audio` pending |
-| Enterprise email login (unlimited queue) | Done | `POST /v1/auth/login` |
+| Enterprise email login | Done | `POST /v1/auth/login` |
 | Guest token (5 items) | Done | `dev-guest-token` |
 | Web enterprise app | In progress | `apps/web` (Next.js) |
 | Classic web player | Done | `index.html` :8765 |

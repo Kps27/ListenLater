@@ -28,6 +28,12 @@
   color: var(--ink);
   text-decoration: none;
 }
+.market-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
 .market-nav nav {
   display: flex;
   align-items: center;
@@ -246,19 +252,67 @@ a.primary {
 .pricing-grid {
   margin-top: 32px;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1.15fr 0.85fr;
   gap: 18px;
+  align-items: stretch;
+}
+.pricing-grid .plan-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 .plan-card, .card-form { padding: 22px; }
-.card-form { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 12px; align-items: stretch; }
+.card-form { display: flex; flex-direction: column; gap: 12px; align-items: stretch; }
 .plan-card.plus { border-color: var(--copper-fill); box-shadow: var(--shadow); }
+.plan-cta { margin-top: auto; align-self: flex-start; text-decoration: none; }
+.pricing-grid .plan-card.plus .plan-cta { align-self: stretch; }
 .price {
-  margin: 0 0 12px;
+  margin: 0;
   font-family: var(--serif);
   font-size: 2.2rem;
   letter-spacing: -0.03em;
 }
-.price span { font-family: var(--sans); font-size: 0.95rem; color: var(--muted); }
+.price span {
+  display: block;
+  margin-top: 4px;
+  font-family: var(--sans);
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+.pay-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+.pay-scrim {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  padding: 0;
+  background: rgb(8 8 14 / 0.62);
+  cursor: pointer;
+}
+.pay-card {
+  position: relative;
+  z-index: 1;
+  width: min(440px, 100%);
+  max-height: min(760px, calc(100dvh - 48px));
+  overflow: auto;
+  box-shadow: var(--shadow);
+}
+.pay-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.pay-head h2 { margin: 0; }
+.pay-close { min-height: 36px; }
+.pay-card .fine { margin: 0; }
+.pay-card .primary { width: 100%; }
 .plan-card ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 8px; }
 .bill-toggle { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
 .bill-toggle button {

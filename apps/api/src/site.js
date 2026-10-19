@@ -22,7 +22,7 @@ export const DEFAULTS = {
   terms: [
     'Listen Later turns links and text you save into a listening queue. You keep the right to the things you save. We keep the right to run the service.',
     'You may save articles you have access to, paste text you have the right to use, and share a link to the original page. A public share carries the title and the original address. It does not carry our copy of the article.',
-    'A free account can add pieces and listen for 60 seconds of each story. Plus is two dollars a month, or ten dollars a year, and removes that listening limit. After sign-in, the price is shown in a local round amount. The card form on this site is a demo until a live payment provider is switched on. A demo checkout does not charge the card.',
+    'A free account can add pieces and listen for 60 seconds of each story. Plus is one dollar a month, or ten dollars a year. Listening on Plus is capped in these terms. After sign-in, the price is shown in a local round amount. The card form on this site is a demo until a live payment provider is switched on. A demo checkout does not charge the card.',
     'Guest use without an email is limited to five items. An account removes that limit. You can export your library and delete your account from Settings.',
     'We do not bypass paywalls or sign-in walls. If a page will not open, the app will say so and ask you to open it yourself or paste the text.',
     'The service is provided as it is today. Listening uses your device voice unless you choose a premium voice later. Playback can fail when a browser has no speech engine.',
@@ -38,7 +38,7 @@ export const DEFAULTS = {
   stripe_secret_key: '',
   razorpay_key_id: '',
   razorpay_key_secret: '',
-  prices: { month_cents: 200, year_cents: 1000, currency: 'USD' },
+  prices: { month_cents: 100, year_cents: 1000, currency: 'USD' },
   free_listen_seconds: 60,
   auth: {
     google_client_id: '',
@@ -91,9 +91,29 @@ export function ensureSite(db) {
   }
   try {
     const stored = JSON.parse(row.json);
+    let changed = false;
     const prices = stored.prices || {};
-    if (prices.currency === 'USD' && prices.month_cents === 100 && prices.year_cents === 1000) {
-      stored.prices = { ...prices, month_cents: 200 };
+    if (prices.currency === 'USD' && prices.month_cents === 200 && prices.year_cents === 1000) {
+      stored.prices = { ...prices, month_cents: 100 };
+      changed = true;
+    }
+    if (typeof stored.terms === 'string') {
+      const nextTerms = stored.terms
+        .replace(
+          'two dollars a month, or ten dollars a year, and removes that listening limit.',
+          'one dollar a month, or ten dollars a year. Listening on Plus is capped in these terms.'
+        )
+        .replace(
+          'one dollar a month, or ten dollars a year, and is capped in these terms.',
+          'one dollar a month, or ten dollars a year. Listening on Plus is capped in these terms.'
+        )
+        .replace('removes that listening limit', 'Listening on Plus is capped in these terms');
+      if (nextTerms !== stored.terms) {
+        stored.terms = nextTerms;
+        changed = true;
+      }
+    }
+    if (changed) {
       db.prepare('update site_settings set json = ?, updated_at = ? where id = ?').run(
         JSON.stringify(stored),
         new Date().toISOString(),
@@ -481,10 +501,9 @@ export function planForUser(db, userId) {
       .get(String(user.email).toLowerCase());
     if (sub) plan = 'plus';
   }
-  const unlimited = plan === 'plus' || plan === 'premium';
+  const plus = plan === 'plus' || plan === 'premium';
   return {
-    plan: unlimited ? plan : 'free',
-    unlimited,
+    plan: plus ? plan : 'free',
     free_listen_seconds: site.free_listen_seconds,
   };
 }

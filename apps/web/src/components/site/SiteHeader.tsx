@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { BrandMark } from '@/components/site/BrandMark';
+import { ThemeToggle } from '@/components/site/ThemeToggle';
 
 const LINKS = [
   { href: '/pricing', label: 'Pricing' },
@@ -26,6 +27,8 @@ export function SiteHeader() {
       <Link href="/" className="market-word" aria-label="Listen Later">
         <BrandMark />
       </Link>
+      <div className="market-tools">
+        <ThemeToggle />
       <button
         type="button"
         className="menu-toggle"
@@ -46,6 +49,7 @@ export function SiteHeader() {
           Start listening
         </Link>
       </nav>
+      </div>
       {open ? (
         <>
           <button type="button" className="nav-scrim" aria-label="Close menu" onClick={() => setOpen(false)} />

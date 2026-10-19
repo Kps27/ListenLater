@@ -21,7 +21,7 @@ npm run dev
 ### Auth
 
 - **Guest (5 items):** `Authorization: Bearer dev-guest-token` — used by default in the classic player.
-- **Enterprise (unlimited):** At [http://127.0.0.1:3001](http://127.0.0.1:3001), enter your work email and **Sign in** (creates a session via `POST /v1/auth/login`).
+- **Enterprise (signed in):** At [http://127.0.0.1:3001](http://127.0.0.1:3001), enter your work email and **Sign in** (creates a session via `POST /v1/auth/login`).
 
 Port **3001** is used on purpose — another project often occupies `:3000` on this machine.
 

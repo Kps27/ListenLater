@@ -10,9 +10,11 @@ import { MiniPlayer } from '@/components/ui/MiniPlayer';
 import { QueueRow } from '@/components/ui/QueueRow';
 import { SentenceHighlighter } from '@/components/ui/SentenceHighlighter';
 import { Toast } from '@/components/ui/Toast';
+import { Onboarding } from '@/components/app/Onboarding';
 import { PlanOffer } from '@/components/app/PlanOffer';
 import { SignInPanel } from '@/components/app/SignInPanel';
 import { BrandMark } from '@/components/site/BrandMark';
+import { ThemeToggle } from '@/components/site/ThemeToggle';
 import { SiteFooter } from '@/components/site/SiteFooter';
 import { SiteHeader } from '@/components/site/SiteHeader';
 import { api } from '@/lib/api';
@@ -210,8 +212,8 @@ export function AppShell() {
   const [plan, setPlan] = useState<'free' | 'plus'>('free');
   const [freeSeconds, setFreeSeconds] = useState(60);
   const [heardMap, setHeardMap] = useState<Record<string, number>>({});
-  const [step, setStep] = useState<'boot' | 'signin' | 'offer' | 'app'>('boot');
-  const [monthLabel, setMonthLabel] = useState('$2');
+  const [step, setStep] = useState<'boot' | 'signin' | 'offer' | 'onboard' | 'app'>('boot');
+  const [monthLabel, setMonthLabel] = useState('$1');
   const [yearLabel, setYearLabel] = useState('$10');
   const [planReady, setPlanReady] = useState(false);
   const [toast, setToast] = useState('');
@@ -221,16 +223,9 @@ export function AppShell() {
   const [allow, setAllow] = useState<string[]>([]);
   const [signOpen, setSignOpen] = useState(false);
   const [account, setAccount] = useState<string | null>(null);
-  const [theme, setTheme] = useState<'light' | 'dark'>('light');
-
   useEffect(() => {
     const savedTheme = localStorage.getItem('ll-theme');
-    const next = savedTheme === 'light' || savedTheme === 'dark'
-      ? savedTheme
-      : window.matchMedia('(prefers-color-scheme: dark)').matches
-        ? 'dark'
-        : 'light';
-    setTheme(next);
+    const next = savedTheme === 'light' || savedTheme === 'dark' ? savedTheme : 'dark';
     document.documentElement.dataset.theme = next;
     const savedEmail = localStorage.getItem('ll-email');
     const token = localStorage.getItem('ll-token');
@@ -245,30 +240,44 @@ export function AppShell() {
     }
   }, []);
 
-  function chooseTheme(next: 'light' | 'dark') {
-    setTheme(next);
-    document.documentElement.dataset.theme = next;
-    localStorage.setItem('ll-theme', next);
+  function finishPlan(email: string, plus: boolean) {
+    if (plus) {
+      localStorage.setItem('ll-plan', 'plus');
+      setPlan('plus');
+    } else {
+      localStorage.removeItem('ll-plan');
+      setPlan('free');
+    }
+    const seen = localStorage.getItem('ll-onboarded') === email;
+    if (!seen) setTab('add');
+    setStep(seen ? 'app' : 'onboard');
+  }
+
+  function showTour(index: number) {
+    setTab(index === 1 ? 'listen' : index === 2 ? 'settings' : 'add');
   }
 
   async function signedIn(value: string) {
     localStorage.setItem('ll-email', value);
+    localStorage.removeItem('ll-plan');
     setAccount(value);
+    setPlan('free');
     setSignOpen(false);
     setMenuOpen(false);
-    let plus = localStorage.getItem('ll-plan') === 'plus';
     const bearer = localStorage.getItem('ll-token');
     if (bearer) {
-      const res = await fetch(`${apiBase()}/v1/me/plan`, { headers: { Authorization: `Bearer ${bearer}` } });
-      if (res.ok) {
-        const data = (await res.json()) as { unlimited?: boolean };
-        if (data.unlimited) plus = true;
+      try {
+        const res = await fetch(`${apiBase()}/v1/me/plan`, { headers: { Authorization: `Bearer ${bearer}` } });
+        if (res.ok) {
+          const data = (await res.json()) as { plan?: string };
+          if (data.plan === 'plus' || data.plan === 'premium') {
+            finishPlan(value, true);
+            return;
+          }
+        }
+      } catch {
+        /* a new account still gets the free or pay choice */
       }
-    }
-    if (plus) {
-      setPlan('plus');
-      setStep('app');
-      return;
     }
     setStep('offer');
   }
@@ -276,6 +285,7 @@ export function AppShell() {
   function signOut() {
     localStorage.removeItem('ll-email');
     localStorage.removeItem('ll-token');
+    localStorage.removeItem('ll-plan');
     setAccount(null);
     setPlan('free');
     setMenuOpen(false);
@@ -283,17 +293,11 @@ export function AppShell() {
   }
 
   useEffect(() => {
-    const localPlus = localStorage.getItem('ll-plan') === 'plus';
     fetchSite().then((site) => {
       setFreeSeconds(site.free_listen_seconds);
       setMonthLabel(formatMoney(site.prices.month_cents, site.prices.currency));
       setYearLabel(formatMoney(site.prices.year_cents, site.prices.currency));
     });
-    if (localPlus) {
-      setPlan('plus');
-      setPlanReady(true);
-      return;
-    }
     const bearer = localStorage.getItem('ll-token');
     if (!bearer || bearer === 'dev-guest-token') {
       setPlanReady(true);
@@ -301,9 +305,15 @@ export function AppShell() {
     }
     fetch(`${apiBase()}/v1/me/plan`, { headers: { Authorization: `Bearer ${bearer}` } })
       .then((res) => (res.ok ? res.json() : null))
-      .then((data: { unlimited?: boolean; free_listen_seconds?: number } | null) => {
+      .then((data: { plan?: string; free_listen_seconds?: number } | null) => {
         if (!data) return;
-        if (data.unlimited) setPlan('plus');
+        if (data.plan === 'plus' || data.plan === 'premium') {
+          localStorage.setItem('ll-plan', 'plus');
+          setPlan('plus');
+        } else {
+          localStorage.removeItem('ll-plan');
+          setPlan('free');
+        }
         if (data.free_listen_seconds) setFreeSeconds(data.free_listen_seconds);
       })
       .catch(() => undefined)
@@ -523,8 +533,11 @@ export function AppShell() {
         .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
         .map((row, index) => ({ ...applyRow(row), position: -200 - index }))
         .filter((item) => item.state !== 'archived');
-      if (!real.length) return;
       const demoIds = new Set(['atl', 'wsj', 'nyt', 'sub', 'heard', 'arch']);
+      if (!real.length) {
+        setItems((list) => list.filter((item) => !demoIds.has(item.id)));
+        return;
+      }
       setItems((list) => {
         const savedIds = new Set(real.map((item) => item.id));
         const savedUrls = new Set(real.map((item) => item.source_url).filter(Boolean));
@@ -653,19 +666,7 @@ export function AppShell() {
     return (
     <>
       <div className="account-tools">
-        <div className="theme-pair" role="group" aria-label="Theme">
-          <button type="button" aria-pressed={theme === 'light'} aria-label="Light" onClick={() => chooseTheme('light')}>
-            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-              <circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" strokeWidth="1.75" />
-              <path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.1 5.1l1.6 1.6M17.3 17.3l1.6 1.6M18.9 5.1l-1.6 1.6M6.7 17.3l-1.6 1.6" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
-            </svg>
-          </button>
-          <button type="button" aria-pressed={theme === 'dark'} aria-label="Dark" onClick={() => chooseTheme('dark')}>
-            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-              <path d="M20 14.5A8 8 0 1 1 9.5 4 6.2 6.2 0 0 0 20 14.5z" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinejoin="round" />
-            </svg>
-          </button>
-        </div>
+        <ThemeToggle />
         {account ? (
           <>
             <button
@@ -718,11 +719,8 @@ export function AppShell() {
         <PlanOffer
           email={account}
           seconds={freeSeconds}
-          onFree={() => setStep('app')}
-          onSubscribed={() => {
-            setPlan('plus');
-            setStep('app');
-          }}
+          onFree={() => finishPlan(account, false)}
+          onSubscribed={() => finishPlan(account, true)}
         />
         <SiteFooter />
       </div>
@@ -730,7 +728,7 @@ export function AppShell() {
   }
 
   return (
-    <div className="ll app-shell">
+    <div className="ll app-shell" data-tour={step === 'onboard' ? (tab === 'listen' ? 'play' : tab === 'settings' ? 'plus' : 'add') : undefined}>
       <header className="brandbar">
         <div className="brand-side">
           <button
@@ -965,7 +963,7 @@ export function AppShell() {
           <div className="settings-list">
             <Link href="/pricing" className="settings-row">
               <span>Plan</span>
-              <span>{plan === 'plus' ? 'Plus · unlimited' : `Free · ${freeSeconds}s per story`}</span>
+              <span>{plan === 'plus' ? 'Plus' : `Free · ${freeSeconds}s per story`}</span>
             </Link>
             <button
               type="button"
@@ -1076,6 +1074,17 @@ export function AppShell() {
         <div style={{ position: 'fixed', left: '50%', bottom: 120, transform: 'translateX(-50%)', zIndex: 40 }}>
           <Toast message={toast} />
         </div>
+      ) : null}
+      {step === 'onboard' && account ? (
+        <Onboarding
+          seconds={freeSeconds}
+          onStep={showTour}
+          onDone={() => {
+            localStorage.setItem('ll-onboarded', account);
+            setTab('add');
+            setStep('app');
+          }}
+        />
       ) : null}
       <SiteFooter />
     </div>

@@ -757,6 +757,53 @@
 }
 .gate-page .signin-card { max-height: none; }
 .gate-page .offer-screen { min-height: 0; flex: 1; }
+.tour-card {
+  position: fixed;
+  z-index: 80;
+  bottom: 24px;
+  width: min(400px, calc(100% - 32px));
+  padding: 20px 22px 18px;
+  background: var(--bg-elevated);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  box-shadow: var(--shadow);
+}
+.tour-card.tour-right { right: 24px; }
+.tour-card.tour-left { left: 24px; }
+.tour-card h2 {
+  margin: 4px 0 0;
+  font-family: var(--serif);
+  font-weight: 520;
+  font-size: 1.7rem;
+  letter-spacing: -0.03em;
+}
+.tour-card .lede { margin: 8px 0 0; color: var(--muted); }
+.tour-card .eyebrow { margin-bottom: 0; }
+.onboard-dots { display: flex; gap: 8px; margin: 18px 0 14px; }
+.onboard-dots button {
+  width: 10px;
+  height: 10px;
+  padding: 0;
+  border: 0;
+  border-radius: 99px;
+  background: var(--line);
+  cursor: pointer;
+}
+.onboard-dots button[aria-current='step'] { background: var(--copper-fill); }
+.onboard-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.tour-card .primary { min-width: 112px; }
+.app-shell[data-tour="add"] .intake,
+.app-shell[data-tour="play"] .stage-player,
+.app-shell[data-tour="play"] .listen-hero,
+.app-shell[data-tour="plus"] .settings-list {
+  box-shadow: 0 0 0 2px var(--copper-fill);
+  border-radius: 18px;
+}
+@media (max-width: 767px) {
+  .tour-card.tour-right,
+  .tour-card.tour-left { left: 16px; right: 16px; width: auto; }
+}
 
 .offer-screen {
   min-height: 100dvh;
@@ -775,6 +822,8 @@
   font-size: clamp(2rem, 4vw, 3.2rem);
   letter-spacing: -0.03em;
 }
+.offer-screen .lede { margin: 12px 0 0; max-width: 40rem; color: var(--muted); }
+.offer-screen .plan-card.plus .primary { align-self: stretch; }
 .offer-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

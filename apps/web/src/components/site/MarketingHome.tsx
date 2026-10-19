@@ -68,7 +68,7 @@ export function MarketingHome() {
             <strong>
               {month} or {year}
             </strong>
-            <p>A month, or a year. Unlimited listening after that.</p>
+            <p>A month, or a year. Plus listening is capped in the terms.</p>
           </div>
         </section>
 
@@ -92,8 +92,8 @@ export function MarketingHome() {
 
         <section className="plans-tease">
           <div>
-            <h2>Free, then two dollars.</h2>
-            <p>Keep adding. Each story includes {site.free_listen_seconds} seconds on the free plan. Plus keeps going.</p>
+            <h2>Free, then one dollar.</h2>
+            <p>Keep adding. Each story includes {site.free_listen_seconds} seconds on the free plan. Plus continues within the cap in the terms.</p>
           </div>
           <Link href="/pricing" className="primary">
             See plans
