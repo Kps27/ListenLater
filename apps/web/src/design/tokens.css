@@ -1,0 +1,90 @@
+/* Vibrant jewel palette. Accent is for play, progress, and the heard sentence.
+   Cover art carries the color; the interface stays quiet around it. */
+
+:root {
+  --bg: #f4efe6;
+  --bg-elevated: #fffdf8;
+  --ink: #1c1712;
+  --muted: #6a6158;
+  --line: #e4d9cc;
+  --copper: #4a2ad8;
+  --copper-fill: #5336ee;
+  --on-copper: #ffffff;
+  --mark: #efe4ff;
+  --warn: #9d2444;
+  --warn-bg: #fde8ee;
+  --shadow: 0 18px 44px rgb(48 32 12 / 0.08);
+  --rail: #fffdf8;
+  --nav-active: #1c1712;
+  --nav-active-ink: #fffdf8;
+  --serif: var(--font-serif), Georgia, "Times New Roman", serif;
+  --sans: var(--font-sans), system-ui, sans-serif;
+  --text-meta: 0.8125rem;
+  --text-ui: 0.9375rem;
+  --text-body: 1.125rem;
+  --text-title: 1.5rem;
+  --text-display: 2rem;
+  --leading-read: 1.65;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --radius-sm: 12px;
+  --radius-md: 18px;
+  --radius-lg: 24px;
+  --radius-pill: 999px;
+  --dur: 180ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --hit: 44px;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0c0e1a;
+    --bg-elevated: #171a2e;
+    --ink: #f5f2ff;
+    --muted: #b2accb;
+    --line: #2e3354;
+    --copper: #c4b5ff;
+    --copper-fill: #7c6bff;
+    --on-copper: #120e24;
+    --mark: #3a2d78;
+    --warn: #ffb3c7;
+    --warn-bg: #3a1828;
+    --shadow: 0 16px 48px rgb(0 0 0 / 0.4);
+    --rail: #101322;
+    --nav-active: #f4f1ff;
+    --nav-active-ink: #12141f;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #0c0e1a;
+  --bg-elevated: #171a2e;
+  --ink: #f5f2ff;
+  --muted: #b2accb;
+  --line: #2e3354;
+  --copper: #c4b5ff;
+  --copper-fill: #7c6bff;
+  --on-copper: #120e24;
+  --mark: #3a2d78;
+  --warn: #ffb3c7;
+  --warn-bg: #3a1828;
+  --shadow: 0 16px 48px rgb(0 0 0 / 0.4);
+  --rail: #101322;
+  --nav-active: #f4f1ff;
+  --nav-active-ink: #12141f;
+  color-scheme: dark;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur: 0ms;
+  }
+}

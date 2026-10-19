@@ -13,7 +13,7 @@ npm run dev
 
 | Service | URL |
 | --- | --- |
-| **Enterprise app (primary)** | [http://127.0.0.1:3000](http://127.0.0.1:3000) |
+| **Enterprise app (primary)** | [http://127.0.0.1:3001](http://127.0.0.1:3001) |
 | **API** | [http://127.0.0.1:3333/health](http://127.0.0.1:3333/health) |
 | **Classic player** | [http://127.0.0.1:8765](http://127.0.0.1:8765) |
 | **Mobile (Expo)** | `npm run dev:mobile` → scan QR in Expo Go |
@@ -21,7 +21,9 @@ npm run dev
 ### Auth
 
 - **Guest (5 items):** `Authorization: Bearer dev-guest-token` — used by default in the classic player.
-- **Enterprise (unlimited):** In the app at `:3000`, enter your work email and **Sign in** (creates a session via `POST /v1/auth/login`).
+- **Enterprise (unlimited):** At [http://127.0.0.1:3001](http://127.0.0.1:3001), enter your work email and **Sign in** (creates a session via `POST /v1/auth/login`).
+
+Port **3001** is used on purpose — another project often occupies `:3000` on this machine.
 
 API only:
 

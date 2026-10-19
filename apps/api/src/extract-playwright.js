@@ -1,6 +1,7 @@
 import { Readability } from '@mozilla/readability';
 import { parseHTML } from 'linkedom';
 import { buildTextPayload, classifyExtracted } from '../../../lib/cleanup.js';
+import { textFromArticle } from './article-text.js';
 
 const UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
@@ -8,7 +9,7 @@ const UA =
 function parseArticleHtml(html) {
   const { document } = parseHTML(html);
   const article = new Readability(document, { charThreshold: 100 }).parse();
-  const raw = article?.textContent || '';
+  const raw = textFromArticle(article);
   const title = article?.title || '';
   const byline = article?.byline || '';
   const classified = classifyExtracted(raw, 200);

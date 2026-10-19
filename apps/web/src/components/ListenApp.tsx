@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import Link from 'next/link';
 import { api, Item, login } from '@/lib/api';
 import { toSentences, wordCount } from '@/lib/sentences';
 
@@ -64,24 +63,24 @@ export default function ListenApp() {
   const sentences = current?.text ? toSentences(current.text) : [];
 
   const speakAt = useCallback(
-    (i: number) => {
-      if (!synth || !current?.text) return;
-      if (i >= sentences.length) {
+    (i: number, item: Item, sents: ReturnType<typeof toSentences>) => {
+      if (!synth || !item.text) return;
+      if (i >= sents.length) {
         setPlaying(false);
-        api.patch(current.id, { state: 'listened', progress_sentence: 0 }).then(refresh);
+        api.patch(item.id, { state: 'listened', progress_sentence: 0 }).then(refresh);
         return;
       }
       setIdx(i);
-      const u = new SpeechSynthesisUtterance(sentences[i].s);
+      const u = new SpeechSynthesisUtterance(sents[i].s);
       u.rate = rate;
       u.onend = () => {
         if (utterRef.current !== u) return;
-        speakAt(i + 1);
+        speakAt(i + 1, item, sents);
       };
       utterRef.current = u;
       synth.speak(u);
     },
-    [synth, current, sentences, rate, refresh]
+    [synth, rate, refresh]
   );
 
   const togglePlay = () => {
@@ -95,7 +94,7 @@ export default function ListenApp() {
     setPlaying(true);
     api.patch(current.id, { state: 'in_progress' });
     synth?.cancel();
-    speakAt(idx);
+    speakAt(idx, current, sentences);
   };
 
   async function addLinks() {
@@ -122,6 +121,33 @@ export default function ListenApp() {
     await refresh();
   }
 
+  const playerRef = useRef<HTMLElement | null>(null);
+
+  const firstReady = useMemo(
+    () => items.find((i) => i.status === 'ready' && i.text && i.state !== 'listened'),
+    [items]
+  );
+
+  function openItem(it: Item) {
+    setCurrentId(it.id);
+    setIdx(it.progress_sentence || 0);
+    setPlaying(false);
+    synth?.cancel();
+    playerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function listenTo(it: Item, autoplay = true) {
+    if (!it.text || it.status !== 'ready') return;
+    setCurrentId(it.id);
+    setIdx(it.progress_sentence || 0);
+    playerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    if (!autoplay) return;
+    setPlaying(true);
+    api.patch(it.id, { state: 'in_progress' });
+    synth?.cancel();
+    speakAt(it.progress_sentence || 0, it, toSentences(it.text));
+  }
+
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900">
       <header className="border-b bg-white px-6 py-4 flex flex-wrap items-center justify-between gap-4">
@@ -143,11 +169,29 @@ export default function ListenApp() {
           >
             Sign in
           </button>
-          <Link href="http://127.0.0.1:8765/" className="text-sm text-emerald-800 underline">
-            Classic player
-          </Link>
+          <button
+            type="button"
+            disabled={!firstReady}
+            title={firstReady ? 'Start the next ready article' : 'Add a link and wait until status is ready'}
+            className="rounded-lg border border-emerald-800 text-emerald-900 px-4 py-2 text-sm font-medium disabled:opacity-40"
+            onClick={() => firstReady && listenTo(firstReady)}
+          >
+            Listen now
+          </button>
+          <a
+            href="http://127.0.0.1:8765/"
+            className="text-sm text-slate-600 underline underline-offset-2"
+            title="Original full-featured single-page player (sleep timer, export, themes)"
+          >
+            Classic player ↗
+          </a>
         </div>
       </header>
+
+      <p className="max-w-6xl mx-auto px-6 pt-4 text-sm text-slate-600">
+        <strong>How to listen:</strong> paste a URL → <strong>Add to queue</strong> → when status is{' '}
+        <em>ready</em>, click <strong>Listen</strong> on the row or <strong>Listen now</strong> above.
+      </p>
 
       <main className="max-w-6xl mx-auto p-6 grid lg:grid-cols-[360px_1fr] gap-6">
         <section className="space-y-4">
@@ -197,10 +241,15 @@ export default function ListenApp() {
               </div>
             )}
             <ul className="space-y-2 max-h-[420px] overflow-auto">
+              {visible.length === 0 && (
+                <li className="text-sm text-slate-500 py-4 text-center">
+                  No items yet — add a link above. Need the API running on port 3333.
+                </li>
+              )}
               {visible.map((it) => (
                 <li
                   key={it.id}
-                  className={`border rounded-lg p-2 text-sm cursor-pointer ${currentId === it.id ? 'ring-2 ring-emerald-700' : ''}`}
+                  className={`border rounded-lg p-2 text-sm ${currentId === it.id ? 'ring-2 ring-emerald-700' : ''}`}
                 >
                   <div className="flex gap-2 items-start">
                     <input
@@ -213,21 +262,21 @@ export default function ListenApp() {
                         setSelected(n);
                       }}
                     />
-                    <button
-                      type="button"
-                      className="text-left flex-1"
-                      onClick={() => {
-                        setCurrentId(it.id);
-                        setIdx(it.progress_sentence || 0);
-                        setPlaying(false);
-                        synth?.cancel();
-                      }}
-                    >
+                    <button type="button" className="text-left flex-1 min-w-0" onClick={() => openItem(it)}>
                       <div className="font-medium line-clamp-2">{it.title || it.source_url || 'Untitled'}</div>
                       <div className="text-xs text-slate-500">
                         {it.status !== 'ready' ? it.status : `${wordCount(it.text || '')} words · ${it.state}`}
                       </div>
                     </button>
+                    {it.status === 'ready' && it.text ? (
+                      <button
+                        type="button"
+                        className="shrink-0 rounded-md bg-emerald-800 text-white text-xs font-semibold px-2.5 py-1.5"
+                        onClick={() => listenTo(it)}
+                      >
+                        Listen
+                      </button>
+                    ) : null}
                   </div>
                 </li>
               ))}
@@ -235,9 +284,17 @@ export default function ListenApp() {
           </div>
         </section>
 
-        <section className="bg-white rounded-xl border p-6 min-h-[480px]">
+        <section
+          ref={playerRef}
+          aria-label="Listening panel"
+          className="bg-white rounded-xl border p-6 min-h-[480px]"
+        >
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500 mb-4">Listening</h2>
           {!current ? (
-            <p className="text-slate-600">Select an item from the library to listen.</p>
+            <p className="text-slate-600">
+              Nothing selected. Choose an article in the library, or use <strong>Listen now</strong> when something
+              is ready.
+            </p>
           ) : !current.text ? (
             <div className="space-y-3">
               <h2 className="text-xl font-medium">{current.title || 'Preparing…'}</h2>
@@ -260,7 +317,7 @@ export default function ListenApp() {
                   onClick={togglePlay}
                   className="rounded-lg bg-emerald-800 text-white px-4 py-2 text-sm font-medium"
                 >
-                  {playing ? 'Pause' : 'Play'}
+                  {playing ? 'Pause' : 'Listen'}
                 </button>
                 <label className="text-sm flex items-center gap-2">
                   Speed
@@ -290,9 +347,9 @@ export default function ListenApp() {
                     className={i === idx ? 'bg-amber-200 rounded px-0.5' : ''}
                     onClick={() => {
                       setIdx(i);
-                      if (playing) {
+                      if (playing && current) {
                         synth?.cancel();
-                        speakAt(i);
+                        speakAt(i, current, sentences);
                       }
                     }}
                   >

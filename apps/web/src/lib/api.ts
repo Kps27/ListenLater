@@ -1,4 +1,4 @@
-const DEFAULT_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:3333';
+import { apiBase } from './site';
 
 export type Item = {
   id: string;
@@ -23,20 +23,57 @@ export function setToken(t: string) {
   localStorage.setItem('ll-token', t);
 }
 
-export async function login(email: string, display_name?: string) {
-  const res = await fetch(`${DEFAULT_BASE}/v1/auth/login`, {
+async function publicPost<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${apiBase()}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({ email, display_name }),
+    body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error('Login failed');
+  const data = (await res.json().catch(() => ({}))) as { error?: string; token?: string };
+  if (!res.ok) throw Object.assign(new Error(data.error || 'request_failed'), { code: data.error });
+  if (data.token) setToken(data.token);
+  return data as T;
+}
+
+export function authStart(email: string) {
+  return publicPost<{ email: string; has_password: boolean }>('/v1/auth/start', { email });
+}
+
+export function authPin(email: string) {
+  return publicPost<{ delivery: string; preview_pin: string | null; sender: 'saved' | 'none' }>('/v1/auth/pin', { email });
+}
+
+export function authVerify(email: string, pin: string) {
+  return publicPost<{ token: string; email: string; needs_password: boolean }>('/v1/auth/pin/verify', {
+    email,
+    pin,
+    adopt_guest: true,
+  });
+}
+
+export function authLogin(email: string, password: string) {
+  return publicPost<{ token: string; email: string }>('/v1/auth/login', { email, password, adopt_guest: true });
+}
+
+export async function login(email: string, display_name?: string) {
+  const res = await fetch(`${apiBase()}/v1/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ email, display_name, adopt_guest: true }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw Object.assign(new Error((err as { error?: string }).error || 'Login failed'), {
+      code: (err as { error?: string }).error,
+    });
+  }
   const data = await res.json();
   setToken(data.token);
   return data;
 }
 
 async function req<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${DEFAULT_BASE}${path}`, {
+  const res = await fetch(`${apiBase()}${path}`, {
     ...init,
     headers: {
       Authorization: `Bearer ${token()}`,
@@ -73,6 +110,8 @@ export function mapItem(row: Record<string, unknown>): Item {
 }
 
 export const api = {
+  listRaw: () => req<{ items: Record<string, unknown>[] }>('/v1/items').then((r) => r.items),
+  getItem: (id: string) => req<Record<string, unknown>>(`/v1/items/${id}`),
   listItems: (q?: { state?: string; q?: string }) => {
     const p = new URLSearchParams();
     if (q?.state) p.set('state', q.state);
@@ -97,9 +136,10 @@ export const api = {
   delete: (id: string) => req(`/v1/items/${id}`, { method: 'DELETE' }),
   retry: (id: string) => req<Record<string, unknown>>(`/v1/items/${id}/retry`, { method: 'POST' }),
   share: (item_id: string) => req<{ url: string; token: string }>('/v1/shares', { method: 'POST', body: JSON.stringify({ item_id }) }),
+  setPassword: (password: string) => req<{ ok: boolean }>('/v1/auth/password', { method: 'POST', body: JSON.stringify({ password }) }),
   subscribe: (onItem: (item: Item) => void) => {
     const es = new EventSource(
-      `${DEFAULT_BASE}/v1/events?access_token=${encodeURIComponent(token())}`
+      `${apiBase()}/v1/events?access_token=${encodeURIComponent(token())}`
     );
     es.addEventListener('item', (e) => {
       try {

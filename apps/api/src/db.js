@@ -71,6 +71,17 @@ export function openDb() {
       revoked_at text
     );
   `);
+  const userCols = db.prepare('pragma table_info(users)').all();
+  if (!userCols.some((col) => col.name === 'password_hash')) {
+    db.exec('alter table users add column password_hash text');
+  }
+  db.exec(`
+    create table if not exists login_pins (
+      email text primary key,
+      pin_hash text not null,
+      expires_at text not null
+    );
+  `);
   ensureDemoUser(db);
   return db;
 }

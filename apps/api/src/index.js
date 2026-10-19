@@ -4,15 +4,19 @@ import { randomBytes } from 'node:crypto';
 import { openDb, rowToItem, uid } from './db.js';
 import { registerAuth, GUEST_ITEM_LIMIT, countActiveItems } from './auth.js';
 import { createUserSession } from './sessions.js';
+import { accountStatus, issuePin, loginWithPassword, setPassword, verifyPin } from './accounts.js';
 import { enqueueExtract, startWorker } from './worker.js';
 import { ingestClientText } from './extract.js';
 import { canonicalUrl } from '../../../lib/model.js';
 import { buildTextPayload } from '../../../lib/cleanup.js';
 import { ensureAudioTable, getOrCreateAudioStub } from './audio.js';
+import { ensureSite, publicSite, adminSite, loginAdmin, saveSite, checkout, planForUser, readSite } from './site.js';
+import { quoteCountry } from './prices.js';
 
 const PORT = Number(process.env.PORT || 3333);
 const db = openDb();
 ensureAudioTable(db);
+ensureSite(db);
 const sseClients = new Set();
 
 function emit(event, payload) {
@@ -83,21 +87,113 @@ const app = Fastify({ logger: true });
 await app.register(cors, { origin: true });
 registerAuth(app, db);
 
+function authError(reply, error) {
+  if (error.code === 'invalid_email') return reply.code(400).send({ error: 'invalid_email' });
+  if (error.code === 'invalid_pin') return reply.code(401).send({ error: 'invalid_pin' });
+  if (error.code === 'invalid_password') return reply.code(401).send({ error: 'invalid_password' });
+  if (error.code === 'needs_pin') return reply.code(409).send({ error: 'needs_pin' });
+  if (error.code === 'weak_password') return reply.code(400).send({ error: 'weak_password' });
+  throw error;
+}
+
+app.post('/v1/auth/start', async (req, reply) => {
+  try {
+    return accountStatus(db, req.body?.email);
+  } catch (e) {
+    return authError(reply, e);
+  }
+});
+
+app.post('/v1/auth/pin', async (req, reply) => {
+  try {
+    const mail = Boolean(readSite(db).auth?.mail_host);
+    return issuePin(db, req.body?.email, mail);
+  } catch (e) {
+    return authError(reply, e);
+  }
+});
+
+app.post('/v1/auth/pin/verify', async (req, reply) => {
+  try {
+    const body = req.body || {};
+    return verifyPin(db, body.email, body.pin, Boolean(body.adopt_guest));
+  } catch (e) {
+    return authError(reply, e);
+  }
+});
+
+app.post('/v1/auth/password', async (req, reply) => {
+  if (!req.userId || req.isGuest) return reply.code(401).send({ error: 'sign_in_required' });
+  try {
+    return setPassword(db, req.userId, req.body?.password);
+  } catch (e) {
+    return authError(reply, e);
+  }
+});
+
 app.post('/v1/auth/login', async (req, reply) => {
   try {
     const body = req.body || {};
+    if (body.password) {
+      return loginWithPassword(db, body.email, body.password, Boolean(body.adopt_guest));
+    }
     const session = createUserSession(db, {
       email: body.email,
       display_name: body.display_name || body.name,
+      adopt_guest: Boolean(body.adopt_guest),
     });
     return session;
   } catch (e) {
-    if (e.code === 'invalid_email') return reply.code(400).send({ error: 'invalid_email' });
-    throw e;
+    return authError(reply, e);
   }
 });
 
 app.get('/health', async () => ({ ok: true }));
+
+app.get('/v1/site', async () => publicSite(db));
+
+app.get('/v1/prices', async (req) => quoteCountry(req.query?.country));
+
+app.get('/v1/admin/hint', async () => {
+  const custom = Boolean(process.env.LL_ADMIN_PASSWORD);
+  return { password: custom ? '' : 'listen-later-admin', custom };
+});
+
+app.post('/v1/admin/login', async (req, reply) => {
+  const session = loginAdmin(db, req.body?.password);
+  if (!session) return reply.code(401).send({ error: 'invalid_admin' });
+  return session;
+});
+
+app.get('/v1/admin/site', async (req, reply) => {
+  const view = adminSite(db, req);
+  if (!view) return reply.code(401).send({ error: 'invalid_admin' });
+  return view;
+});
+
+app.put('/v1/admin/site', async (req, reply) => {
+  try {
+    const view = saveSite(db, req, req.body || {});
+    if (!view) return reply.code(401).send({ error: 'invalid_admin' });
+    return view;
+  } catch (e) {
+    if (e.code === 'invalid_url') return reply.code(400).send({ error: 'invalid_url' });
+    throw e;
+  }
+});
+
+app.post('/v1/billing/checkout', async (req, reply) => {
+  try {
+    return checkout(db, req.body || {});
+  } catch (e) {
+    const code = e.code || 'checkout_failed';
+    const status = code === 'card_number' || code === 'card_exp' || code === 'card_cvc' || code === 'card_name' || code === 'invalid_email' || code === 'invalid_plan' ? 400 : 500;
+    if (status === 500) throw e;
+    return reply.code(status).send({ error: code });
+  }
+});
+
+app.get('/v1/me/plan', async (req) => planForUser(db, req.userId));
 
 app.get('/v1/events', async (req, reply) => {
   reply.raw.writeHead(200, {
@@ -291,7 +387,7 @@ app.post('/v1/shares', async (req, reply) => {
     `insert into shares (token, user_id, item_id, source_url, title, created_at)
      values (?, ?, ?, ?, ?, ?)`
   ).run(token, req.userId, row.id, row.source_url, row.title, now);
-  const webBase = process.env.LL_WEB_URL || 'http://127.0.0.1:3000';
+  const webBase = process.env.LL_WEB_URL || 'http://127.0.0.1:3001';
   return { url: `${webBase}/s/${token}`, token };
 });
 

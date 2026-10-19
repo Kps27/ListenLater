@@ -8,6 +8,14 @@ export function registerAuth(app, db) {
     const path = req.url.split('?')[0];
     if (path === '/health') return;
     if (path === '/v1/auth/login' && req.method === 'POST') return;
+    if (path === '/v1/auth/start' && req.method === 'POST') return;
+    if (path === '/v1/auth/pin' && req.method === 'POST') return;
+    if (path === '/v1/auth/pin/verify' && req.method === 'POST') return;
+    if (path === '/v1/site' && req.method === 'GET') return;
+    if (path === '/v1/prices' && req.method === 'GET') return;
+    if (path === '/v1/admin/login' && req.method === 'POST') return;
+    if (path === '/v1/billing/checkout' && req.method === 'POST') return;
+    if (path.startsWith('/v1/admin/')) return;
     if (path.startsWith('/v1/shares/') && req.method === 'GET') return;
     if (path.startsWith('/v1/webhooks/')) return;
 
