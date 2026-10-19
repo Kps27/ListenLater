@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
 const TOKEN_KEY = 'll-token';
+const EMAIL_KEY = 'll-email';
 
 export function apiBase(): string {
   const env = process.env.EXPO_PUBLIC_API_URL;
@@ -10,11 +11,22 @@ export function apiBase(): string {
 }
 
 export async function getToken(): Promise<string> {
-  return (await AsyncStorage.getItem(TOKEN_KEY)) || 'dev-guest-token';
+  return (await AsyncStorage.getItem(TOKEN_KEY)) || '';
 }
 
-export async function setToken(token: string) {
-  await AsyncStorage.setItem(TOKEN_KEY, token);
+export async function getEmail(): Promise<string> {
+  return (await AsyncStorage.getItem(EMAIL_KEY)) || '';
+}
+
+export async function setSession(token: string, email: string) {
+  await AsyncStorage.multiSet([
+    [TOKEN_KEY, token],
+    [EMAIL_KEY, email.trim().toLowerCase()],
+  ]);
+}
+
+export async function clearSession() {
+  await AsyncStorage.multiRemove([TOKEN_KEY, EMAIL_KEY, 'll-plan']);
 }
 
 export type Item = {
@@ -27,6 +39,7 @@ export type Item = {
   state: string;
   position: number;
   progress_sentence?: number;
+  fail_reason?: string | null;
 };
 
 async function req<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -34,17 +47,18 @@ async function req<T>(path: string, init: RequestInit = {}): Promise<T> {
   const res = await fetch(`${apiBase()}${path}`, {
     ...init,
     headers: {
-      Authorization: `Bearer ${token}`,
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       Accept: 'application/json',
       ...(init.body ? { 'Content-Type': 'application/json' } : {}),
       ...(init.headers as Record<string, string>),
     },
   });
+  const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error((err as { error?: string }).error || res.statusText);
+    const error = (data as { error?: string }).error || res.statusText;
+    throw Object.assign(new Error(error), { code: (data as { error?: string }).error });
   }
-  return res.json() as Promise<T>;
+  return data as T;
 }
 
 export function mapItem(row: Record<string, unknown>): Item {
@@ -58,27 +72,83 @@ export function mapItem(row: Record<string, unknown>): Item {
     state: String(row.state),
     position: Number(row.position) || 0,
     progress_sentence: Number(row.progress_sentence) || 0,
+    fail_reason: (row.fail_reason as string) || null,
   };
 }
 
+export function splitSentences(text: string): string[] {
+  const out: string[] = [];
+  for (const block of text.split(/\n\n+/)) {
+    const parts = block.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [];
+    for (const part of parts) {
+      const sentence = part.trim();
+      if (sentence) out.push(sentence);
+    }
+  }
+  return out;
+}
+
+export function countryCode() {
+  try {
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (zone === 'Asia/Kolkata' || zone === 'Asia/Calcutta') return 'IN';
+    if (zone?.startsWith('Europe/London')) return 'GB';
+    if (zone?.startsWith('America/')) return 'US';
+  } catch {
+    /* ignore */
+  }
+  return 'US';
+}
+
+export function formatMoney(cents: number, currency: string) {
+  try {
+    return new Intl.NumberFormat(undefined, { style: 'currency', currency, maximumFractionDigits: cents % 100 === 0 ? 0 : 2 }).format(cents / 100);
+  } catch {
+    return `$${(cents / 100).toFixed(0)}`;
+  }
+}
+
 export const api = {
-  login: async (email: string) => {
-    const res = await fetch(`${apiBase()}/v1/auth/login`, {
+  start: (email: string) =>
+    req<{ email: string; has_password: boolean }>('/v1/auth/start', { method: 'POST', body: JSON.stringify({ email }) }),
+  pin: (email: string) =>
+    req<{ preview_pin: string | null; sender: 'saved' | 'none' }>('/v1/auth/pin', { method: 'POST', body: JSON.stringify({ email }) }),
+  verify: async (email: string, pin: string) => {
+    const data = await req<{ token: string; email: string; needs_password: boolean }>('/v1/auth/pin/verify', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ email, pin, adopt_guest: false }),
     });
-    if (!res.ok) throw new Error('Login failed');
-    const data = await res.json();
-    await setToken(data.token);
+    await setSession(data.token, data.email);
     return data;
   },
+  login: async (email: string, password: string) => {
+    const data = await req<{ token: string; email: string }>('/v1/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password, adopt_guest: false }),
+    });
+    await setSession(data.token, data.email);
+    return data;
+  },
+  setPassword: (password: string) => req<{ ok: boolean }>('/v1/auth/password', { method: 'POST', body: JSON.stringify({ password }) }),
+  plan: () => req<{ plan?: string; free_listen_seconds?: number }>('/v1/me/plan'),
+  prices: (country: string) =>
+    req<{ currency: string; month_cents: number; year_cents: number; save_percent: number; country: string }>(
+      `/v1/prices?country=${encodeURIComponent(country)}`
+    ),
+  site: () =>
+    req<{ free_listen_seconds?: number; prices?: { month_cents: number; year_cents: number; currency: string }; payment?: { provider?: string } }>(
+      '/v1/site'
+    ),
+  checkout: (body: { email: string; interval: 'month' | 'year'; country?: string; card: { name: string; number: string; exp: string; cvc: string } }) =>
+    req<{ last4?: string; provider?: string; amount_cents?: number; currency?: string }>('/v1/billing/checkout', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
   listItems: () =>
     req<{ items: Record<string, unknown>[] }>('/v1/items').then((r) =>
       r.items.map(mapItem).sort((a, b) => a.position - b.position)
     ),
-  createUrls: (urls: string[]) =>
-    req('/v1/items', { method: 'POST', body: JSON.stringify({ urls, channel: 'mobile' }) }),
-  patch: (id: string, patch: Record<string, unknown>) =>
-    req(`/v1/items/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+  createUrls: (urls: string[]) => req('/v1/items', { method: 'POST', body: JSON.stringify({ urls, channel: 'mobile' }) }),
+  createText: (text: string) => req('/v1/items', { method: 'POST', body: JSON.stringify({ text, channel: 'paste' }) }),
+  patch: (id: string, patch: Record<string, unknown>) => req(`/v1/items/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
 };

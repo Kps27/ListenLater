@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Fraunces, Outfit } from 'next/font/google';
+import { PhoneIntro } from '@/components/site/PhoneIntro';
 import './globals.css';
 
 const serif = Fraunces({
@@ -29,6 +30,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }}
         />
         {children}
+        <PhoneIntro />
       </body>
     </html>
   );

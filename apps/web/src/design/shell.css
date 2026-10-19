@@ -488,13 +488,37 @@
 
 .now-read { display: none; }
 .copy-title {
-  margin: 12px 0 0.9em;
-  font-family: var(--serif);
-  font-weight: 520;
-  font-size: clamp(1.7rem, 2.2vw, 2.4rem);
-  letter-spacing: -0.03em;
-  line-height: 1.15;
+  margin: 8px 0 0.35em;
+  font-family: Georgia, "Iowan Old Style", Palatino, "Palatino Linotype", serif;
+  font-weight: 500;
+  font-size: clamp(2.15rem, 2.8vw, 2.85rem);
+  letter-spacing: -0.025em;
+  line-height: 1.12;
+  color: #1a1a1a;
 }
+.copy-byline {
+  margin: 0 0 1.7em;
+  font-family: var(--sans);
+  font-size: 0.95rem;
+  line-height: 1.4;
+  color: #6e6e6e;
+}
+.now-read .prose {
+  font-family: Georgia, "Iowan Old Style", Palatino, "Palatino Linotype", serif;
+  font-size: 1.22rem;
+  line-height: 1.75;
+  color: #1c1c1c;
+}
+.now-read .prose p { margin: 0 0 1.45em; }
+.now-read .prose p:first-of-type { font-style: italic; }
+.now-read .prose .s.on {
+  background: #f3e7a1;
+  color: inherit;
+}
+:root[data-theme="dark"] .copy-title,
+:root[data-theme="dark"] .now-read .prose { color: #f3f0e8; }
+:root[data-theme="dark"] .copy-byline { color: #b7b3a8; }
+:root[data-theme="dark"] .now-read .prose .s.on { background: #3a2d78; color: #f6f3ff; }
 
 @media (min-width: 768px) and (max-width: 1279px) {
   .app-shell {
@@ -705,11 +729,33 @@
 .app-shell .filters .ghost { min-height: 36px; }
 .app-shell .topbar { display: none; }
 @media (max-width: 767px) {
-  .app-shell .site-footer {
-    flex-wrap: wrap;
-    row-gap: 0;
-    padding: 4px 12px calc(12px + env(safe-area-inset-bottom));
+  .app-shell .site-footer { display: none; }
+  .app-shell .brandbar {
+    position: sticky;
+    top: 0;
+    z-index: 6;
+    flex-wrap: nowrap;
+    background: color-mix(in srgb, var(--bg) 92%, transparent);
+    backdrop-filter: blur(14px);
   }
+  .app-shell .brand-end {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 24;
+    flex: none;
+    margin: 0;
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+    background: color-mix(in srgb, var(--bg) 94%, transparent);
+    backdrop-filter: blur(16px);
+    border-top: 1px solid var(--line);
+  }
+  .app-shell .band-nav { width: 100%; }
+  .app-shell .dock { bottom: calc(62px + env(safe-area-inset-bottom)); }
+  .app-shell .stage { padding-bottom: calc(148px + env(safe-area-inset-bottom)); }
+  .app-shell .tour-card { bottom: calc(132px + env(safe-area-inset-bottom)); }
+  .player-sheet { z-index: 40; padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
 }
 .foot-brand a {
   color: var(--ink);

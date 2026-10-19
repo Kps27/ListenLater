@@ -348,6 +348,10 @@
 @media (prefers-reduced-motion: reduce) {
   .play-orb, .play-sheen { animation: none; }
 }
+.player,
+.player h2 {
+  color: #f6f3ff;
+}
 .player h2 {
   font-family: var(--serif);
   font-size: var(--text-title);
@@ -356,7 +360,15 @@
   text-align: center;
   margin: 0;
 }
-.player .sub { color: var(--muted); margin: 0; text-align: center; }
+.player .sub,
+.player .times { color: #d4ceea; }
+.player .sub { margin: 0; text-align: center; }
+.player .ghost {
+  color: #f6f3ff;
+  border-color: rgb(246 243 255 / 0.32);
+  background: transparent;
+}
+.player .voice-menu { color: var(--ink); }
 .scrub { width: 100%; accent-color: var(--copper-fill); height: 28px; }
 .times { display: flex; justify-content: space-between; width: 100%; color: var(--muted); font-size: var(--text-meta); font-variant-numeric: tabular-nums; margin-top: -8px; }
 .transport { display: flex; align-items: center; justify-content: center; gap: var(--space-5); }

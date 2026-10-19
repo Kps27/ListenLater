@@ -499,6 +499,35 @@ a.settings-row { text-decoration: none; color: inherit; }
   .card-row { grid-template-columns: 1fr; }
 }
 
+.phone-intro {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 28px 24px calc(28px + env(safe-area-inset-bottom));
+  background:
+    radial-gradient(520px 280px at 10% 0%, rgb(124 107 255 / 0.35), transparent 60%),
+    var(--bg);
+  color: var(--ink);
+}
+.phone-intro h1 {
+  margin: 0;
+  font-family: var(--serif);
+  font-weight: 520;
+  font-size: clamp(2.4rem, 10vw, 3.4rem);
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+.phone-intro .lede { margin: 0; max-width: 28rem; color: var(--muted); font-size: 1.05rem; }
+.phone-intro .primary,
+.phone-intro .ghost { min-width: 148px; }
+@media (min-width: 768px) {
+  .phone-intro { display: none; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .wave span { animation: none; height: 16px; }
 }

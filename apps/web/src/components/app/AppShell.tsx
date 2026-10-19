@@ -1026,6 +1026,7 @@ export function AppShell() {
               {episode.title && !copyOpensWith(episode.title, current?.sentences?.[0]) ? (
                 <h1 className="copy-title">{episode.title}</h1>
               ) : null}
+              {episode.siteName ? <p className="copy-byline">{episode.siteName}</p> : null}
               <SentenceHighlighter sentences={current?.sentences || []} paragraphs={current?.paragraphs} index={index} onJump={setIndex} />
             </div>
           </div>
@@ -1034,7 +1035,7 @@ export function AppShell() {
         )}
       </aside>
 
-      {episode && tab !== 'listen' ? (
+      {episode ? (
         <div className="dock">
           <MiniPlayer episode={episode} playing={playing} onToggle={toggle} onExpand={() => setSheet(true)} />
         </div>

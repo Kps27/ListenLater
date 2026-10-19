@@ -10,7 +10,7 @@ Full handoff MVP + enterprise delivery (no milestone gates). Status as of Oct 20
 | Web enterprise app | In progress | `apps/web` (Next.js) |
 | Classic web player | Done | `index.html` :8765 |
 | Chrome extension + Readability | Done | `npm run build:extension` → load `extensions/chrome` |
-| Mobile iOS/Android | Shell | `apps/mobile` — Expo + `expo-speech`, queue + play |
+| Mobile iOS/Android | First-run app | `apps/mobile` — welcome, sign-in, Plus or free, Listen / Add / player |
 | Extraction Playwright fallback | Done | `apps/api` when static fetch under 150 words; `LL_PLAYWRIGHT=0` to disable |
 | Premium neural TTS | Stub | `GET /v1/items/:id/audio?voice=` manifest + `fallback: device` |
 | Trafilatura / 500-URL CI | Planned | Python worker |
