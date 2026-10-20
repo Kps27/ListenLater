@@ -46,7 +46,10 @@ export function PlanOffer({
         <div className="offer-grid">
           <section className="plan-card plus">
             <h2>Plus</h2>
-            <p className="fine">Prices for {quote.country}. A year saves {quote.save_percent}%.</p>
+            <p className="price">
+              {interval === 'year' ? year : month}
+              <span>{interval === 'year' ? `a year · save ${quote.save_percent}%` : `a month, or ${year} a year`}</span>
+            </p>
             <div className="bill-toggle" role="group" aria-label="Billing period">
               <button type="button" aria-pressed={interval === 'month'} onClick={() => setInterval('month')}>
                 {month} a month

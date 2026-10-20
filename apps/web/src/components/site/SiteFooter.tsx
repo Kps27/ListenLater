@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { BrandMark } from '@/components/site/BrandMark';
 import { DEFAULT_SITE, fetchSite, type SiteConfig } from '@/lib/site';
 
 const ICONS = [
@@ -34,10 +33,15 @@ export function SiteFooter() {
   return (
     <footer className="site-footer">
       <div className="foot-brand">
-        <Link href="/" aria-label="Listen Later">
-          <BrandMark />
-        </Link>
-        <p>{site.copyright}</p>
+        <p>
+          <span>{site.copyright}</span>
+          <span className="foot-origin">
+            <span className="foot-heart" aria-hidden="true">♥</span>
+            {' '}born in <b>Bangalore</b>
+            <span className="foot-flag" role="img" aria-label="India">🇮🇳</span>, built in <b>SFO</b>
+            <span className="foot-flag" role="img" aria-label="United States">🇺🇸</span>
+          </span>
+        </p>
       </div>
       <nav className="foot-links" aria-label="Company">
         <Link href="/pricing">Pricing</Link>

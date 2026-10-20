@@ -21,8 +21,6 @@ import { api } from '@/lib/api';
 import { apiBase, fetchSite, formatMoney } from '@/lib/site';
 import { formatQueued } from '@/design/types';
 import {
-  INITIAL_ITEMS,
-  SAVE_ADDRESS,
   SLEEPS,
   SPEEDS,
   failCopy,
@@ -56,7 +54,44 @@ function kindName(kind: SourceKind) {
 function copyOpensWith(title: string, sentence?: string) {
   const head = (sentence || '').replace(/\s+/g, ' ').trim().toLowerCase();
   const name = title.replace(/\s+/g, ' ').trim().toLowerCase();
-  return Boolean(name) && (head === name || head.startsWith(`${name}.`) || head.startsWith(`${name} `));
+  if (!name || !head) return false;
+  return head === name || head.startsWith(`${name}.`) || head.startsWith(`${name} `) || name.startsWith(head);
+}
+
+function pasteTitle(text: string) {
+  const opening = text
+    .replace(/\r/g, '')
+    .split(/\n\s*\n/)
+    .map((part) => part.trim())
+    .filter(Boolean)[0]
+    ?.split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)[0] || text.trim();
+  if (opening.length <= 140 && !/[.!?]$/.test(opening)) return opening;
+  const sentence = opening.match(/^[^.!?]+[.!?]/)?.[0]?.trim() || opening;
+  if (sentence.length <= 180) return sentence.replace(/[.!?]+$/, '').trim();
+  const cut = sentence.slice(0, 140);
+  const space = cut.lastIndexOf(' ');
+  return (space > 40 ? cut.slice(0, space) : cut).trim();
+}
+
+function pasteSentences(text: string) {
+  const blocks = text.replace(/\r/g, '').split(/\n\s*\n|\n/).map((part) => part.trim()).filter(Boolean);
+  const sentences: string[] = [];
+  for (const block of blocks) {
+    const parts = block.match(/[^.!?]+[.!?]+|[^.!?]+$/g)?.map((part) => part.trim()).filter(Boolean) || [block];
+    sentences.push(...parts);
+  }
+  return sentences.length ? sentences : [text.trim()];
+}
+
+function tidyTitle(title: string, sentences: string[]) {
+  const flat = title.replace(/\s+/g, ' ').trim();
+  const first = (sentences[0] || '').replace(/\s+/g, ' ').trim();
+  if (!flat) return first;
+  if (!first) return flat;
+  if (flat.toLowerCase().startsWith(first.toLowerCase()) && flat.length > first.length) return first;
+  return flat;
 }
 
 function isUnheard(item: Item) {
@@ -178,12 +213,64 @@ function alignSentences(chunks: string[], sentences: string[]) {
   return filled.length ? filled : [sentences];
 }
 
+function storyBody(title: string, text: string, paragraphs?: string[][], sentences?: string[]) {
+  const raw = text.replace(/\r/g, '').trim();
+  if (raw) {
+    const lines = raw.split('\n');
+    const first = lines[0].replace(/\s+/g, ' ').trim();
+    if (copyOpensWith(title, first)) return lines.slice(1).join('\n').replace(/^\s+/, '');
+    return raw;
+  }
+  const groups = paragraphs?.length ? paragraphs : sentences?.length ? [sentences] : [];
+  return groups
+    .filter((group, i) => !(i === 0 && group.length === 1 && copyOpensWith(title, group[0])))
+    .map((group) => group.join(' ').replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+function readingView(item: Item) {
+  const title = item.title.replace(/\s+/g, ' ').trim();
+  const sentences = item.sentences;
+  const paragraphs = item.paragraphs?.some((group) => group.length) ? item.paragraphs : [sentences];
+  const lead = (sentences[0] || '').replace(/\s+/g, ' ').trim();
+  if (!title || !copyOpensWith(title, lead)) return { title, sentences, paragraphs, offset: 0 };
+  const rest = sentences.slice(1);
+  const groups = paragraphs[0]?.length === 1 && copyOpensWith(title, paragraphs[0][0]) ? paragraphs.slice(1) : paragraphs;
+  return { title, sentences: rest, paragraphs: groups.length ? groups : rest.length ? [rest] : [], offset: 1 };
+}
+
+function StoryFields({
+  title,
+  body,
+  onTitle,
+  onBody,
+}: {
+  title: string;
+  body: string;
+  onTitle: (value: string) => void;
+  onBody: (value: string) => void;
+}) {
+  return (
+    <div className="copy-edit">
+      <label className="stack-label">
+        <span>Headline</span>
+        <input className="field" value={title} aria-label="Headline" onChange={(event) => onTitle(event.target.value)} />
+      </label>
+      <label className="stack-label">
+        <span>Body</span>
+        <textarea className="area" value={body} aria-label="Body" onChange={(event) => onBody(event.target.value)} />
+      </label>
+    </div>
+  );
+}
+
 function withHeadline(title: string, sentences: string[], paragraphs: string[][]) {
-  const lines = title.split(/\n+/).map((line) => line.trim()).filter(Boolean);
-  const first = (sentences[0] || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  const known = sentences.map((sentence) => sentence.replace(/\s+/g, ' ').trim().toLowerCase());
+  const lines = title.split(/\n+/).map((line) => line.replace(/\s+/g, ' ').trim()).filter(Boolean);
   const extra = lines.filter((line) => {
-    const name = line.replace(/\s+/g, ' ').trim().toLowerCase();
-    return Boolean(name) && first !== name && !first.startsWith(`${name} `) && !first.startsWith(`${name}.`);
+    const name = line.toLowerCase();
+    return !known.some((sentence) => sentence === name || sentence.startsWith(name));
   });
   if (!extra.length) return { sentences, paragraphs };
   return { sentences: [...extra, ...sentences], paragraphs: [extra, ...paragraphs] };
@@ -192,8 +279,8 @@ function withHeadline(title: string, sentences: string[], paragraphs: string[][]
 function applyRow(row: Record<string, unknown>): Item {
   const url = String(row.source_url || '');
   const site = String(row.site_name || hostOf(url) || 'Saved');
-  const title = String(row.title || site);
   const read = readingFrom(row);
+  const title = tidyTitle(String(row.title || site), read.sentences);
   const reading = withHeadline(title, read.sentences, read.paragraphs);
   return {
     id: String(row.id),
@@ -208,23 +295,22 @@ function applyRow(row: Record<string, unknown>): Item {
     progress_sentence: Number(row.progress_sentence) || 0,
     sentences: reading.sentences,
     paragraphs: reading.paragraphs,
+    text: String(row.text || ''),
   };
 }
 
 export function AppShell() {
-  const [items, setItems] = useState<Item[]>(
-    INITIAL_ITEMS.filter((item) => item.status === 'ready' || item.source_channel === 'email' || item.held)
-  );
+  const [items, setItems] = useState<Item[]>([]);
   const [tab, setTab] = useState<Tab>('listen');
   const [menuOpen, setMenuOpen] = useState(false);
   const [listenFilter, setListenFilter] = useState<ListenFilter>('all');
   const [listPage, setListPage] = useState(1);
-  const [currentId, setCurrentId] = useState('atl');
+  const [currentId, setCurrentId] = useState('');
   const [index, setIndex] = useState(2);
   const [playing, setPlaying] = useState(false);
   const [sheet, setSheet] = useState(false);
   const [showText, setShowText] = useState(false);
-  const [speedI, setSpeedI] = useState(2);
+  const [speedI, setSpeedI] = useState(3);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [voiceId, setVoiceId] = useState('');
   const [sleepI, setSleepI] = useState(0);
@@ -235,10 +321,16 @@ export function AppShell() {
   const [monthLabel, setMonthLabel] = useState('$1');
   const [yearLabel, setYearLabel] = useState('$10');
   const [planReady, setPlanReady] = useState(false);
+  const [saveAddress, setSaveAddress] = useState('');
+  const [mailReceiving, setMailReceiving] = useState(false);
   const [toast, setToast] = useState('');
   const [dragId, setDragId] = useState<string | null>(null);
   const [urlDraft, setUrlDraft] = useState('');
+  const [titleDraft, setTitleDraft] = useState('');
   const [textDraft, setTextDraft] = useState('');
+  const [editTitle, setEditTitle] = useState('');
+  const [editBody, setEditBody] = useState('');
+  const [editing, setEditing] = useState(false);
   const [allow, setAllow] = useState<string[]>([]);
   const [signOpen, setSignOpen] = useState(false);
   const [account, setAccount] = useState<string | null>(null);
@@ -249,8 +341,13 @@ export function AppShell() {
     const savedEmail = localStorage.getItem('ll-email');
     const token = localStorage.getItem('ll-token');
     const signed = Boolean(savedEmail && token && token !== 'dev-guest-token');
-    if (signed && savedEmail) setAccount(savedEmail);
-    setStep(signed ? 'app' : 'signin');
+    if (signed && savedEmail) {
+      setAccount(savedEmail);
+      const seen = localStorage.getItem('ll-onboarded') === savedEmail;
+      setStep(seen ? 'app' : 'onboard');
+    } else {
+      setStep('signin');
+    }
     try {
       const savedHeard = JSON.parse(localStorage.getItem('ll-heard-by-story') || '{}') as Record<string, number>;
       if (savedHeard && typeof savedHeard === 'object') setHeardMap(savedHeard);
@@ -272,18 +369,24 @@ export function AppShell() {
     setStep(seen ? 'app' : 'onboard');
   }
 
-  function showTour(index: number) {
-    setTab(index === 1 ? 'listen' : index === 2 ? 'settings' : 'add');
-  }
-
   async function signedIn(value: string) {
     localStorage.setItem('ll-email', value);
     localStorage.removeItem('ll-plan');
     setAccount(value);
+    const bearer = localStorage.getItem('ll-token');
+    if (bearer && bearer !== 'dev-guest-token') {
+      fetch(`${apiBase()}/v1/me`, { headers: { Authorization: `Bearer ${bearer}` } })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data: { save_address?: string; receiving?: boolean } | null) => {
+          if (!data) return;
+          setSaveAddress(data.save_address || '');
+          setMailReceiving(Boolean(data.receiving));
+        })
+        .catch(() => undefined);
+    }
     setPlan('free');
     setSignOpen(false);
     setMenuOpen(false);
-    const bearer = localStorage.getItem('ll-token');
     if (bearer) {
       try {
         const res = await fetch(`${apiBase()}/v1/me/plan`, { headers: { Authorization: `Bearer ${bearer}` } });
@@ -305,6 +408,8 @@ export function AppShell() {
     localStorage.removeItem('ll-email');
     localStorage.removeItem('ll-token');
     localStorage.removeItem('ll-plan');
+    setSaveAddress('');
+    setMailReceiving(false);
     setAccount(null);
     setPlan('free');
     setMenuOpen(false);
@@ -322,6 +427,14 @@ export function AppShell() {
       setPlanReady(true);
       return;
     }
+    fetch(`${apiBase()}/v1/me`, { headers: { Authorization: `Bearer ${bearer}` } })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { save_address?: string; receiving?: boolean } | null) => {
+        if (!data) return;
+        setSaveAddress(data.save_address || '');
+        setMailReceiving(Boolean(data.receiving));
+      })
+      .catch(() => undefined);
     fetch(`${apiBase()}/v1/me/plan`, { headers: { Authorization: `Bearer ${bearer}` } })
       .then((res) => {
         if (res.status === 401) {
@@ -360,6 +473,11 @@ export function AppShell() {
   }, [heardMap, currentId, freeSeconds, plan, planReady]);
 
   const current = items.find((i) => i.id === currentId && i.status === 'ready') || null;
+  const view = current ? readingView(current) : null;
+
+  useEffect(() => {
+    setEditing(false);
+  }, [currentId]);
   const speed = SPEEDS[speedI];
   const readyUpNext = items
     .filter((i) => i.state === 'up_next' && i.status === 'ready' && !i.held)
@@ -558,16 +676,16 @@ export function AppShell() {
         .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
         .map((row, index) => ({ ...applyRow(row), position: -200 - index }))
         .filter((item) => item.state !== 'archived');
-      const demoIds = new Set(['atl', 'wsj', 'nyt', 'sub', 'heard', 'arch']);
-      if (!real.length) {
-        setItems((list) => list.filter((item) => !demoIds.has(item.id)));
-        return;
-      }
       setItems((list) => {
         const savedIds = new Set(real.map((item) => item.id));
         const savedUrls = new Set(real.map((item) => item.source_url).filter(Boolean));
-        const kept = list.filter((item) => !demoIds.has(item.id) && !savedIds.has(item.id) && !savedUrls.has(item.source_url));
-        return [...real, ...kept];
+        const pending = list.filter(
+          (item) =>
+            (item.id.startsWith('pending-') || item.id.startsWith('paste-')) &&
+            !savedIds.has(item.id) &&
+            !savedUrls.has(item.source_url)
+        );
+        return [...real, ...pending];
       });
       if (selectFirst) {
         const playable = real.find((item) => item.status === 'ready' && item.sentences.length);
@@ -656,15 +774,23 @@ export function AppShell() {
   }
 
   function addPasted() {
-    const text = textDraft.trim();
-    if (text.split(/\s+/).length < 5) {
+    const headline = titleDraft.trim();
+    const body = textDraft.trim();
+    if (!headline) {
+      note('Add a headline');
+      return;
+    }
+    if (body.split(/\s+/).filter(Boolean).length < 5) {
       note('Paste a bit more of the article');
       return;
     }
-    const sentences = text.match(/[^.!?]+[.!?]+|[^.!?]+$/g)?.map((sentence) => sentence.trim()).filter(Boolean) || [text];
+    const sentences = pasteSentences(body);
+    const paragraphs = groupParagraphs(body, sentences, []);
+    const reading = withHeadline(headline, sentences, paragraphs);
     const local: Item = {
       id: `paste-${Date.now()}`,
-      title: text.slice(0, 80),
+      title: headline,
+      text: body,
       site_name: 'Pasted text',
       source_url: '',
       source_channel: 'paste',
@@ -673,23 +799,68 @@ export function AppShell() {
       state: 'up_next',
       position: -1000,
       progress_sentence: 0,
-      sentences,
-      paragraphs: groupParagraphs(text, sentences, []),
+      sentences: reading.sentences,
+      paragraphs: reading.paragraphs,
     };
     setItems((list) => [local, ...list]);
     openPiece(local);
+    setTitleDraft('');
     setTextDraft('');
     note('Added to Listen');
     api
-      .createText(local.title, text)
+      .createText(headline, body)
       .then((res) => {
         const row = res.items?.[0];
         if (!row) return;
-        const saved = { ...applyRow(row), position: -1000 };
+        const saved = { ...applyRow(row), position: -1000, text: body };
         setItems((list) => list.map((item) => (item.id === local.id ? saved : item)));
         setCurrentId(saved.id);
       })
       .catch(() => undefined);
+  }
+
+  function beginEdit() {
+    if (!current) return;
+    setEditTitle(current.title);
+    setEditBody(storyBody(current.title, current.text || '', current.paragraphs, current.sentences));
+    setEditing(true);
+    setPlaying(false);
+    setShowText(true);
+  }
+
+  async function saveStory() {
+    if (!current) return;
+    const headline = editTitle.trim();
+    const body = editBody.trim();
+    if (!headline && body.split(/\s+/).filter(Boolean).length < 3) {
+      note('Add a headline or a bit of the article');
+      return;
+    }
+    const sentences = body ? pasteSentences(body) : [];
+    const paragraphs = body ? groupParagraphs(body, sentences, []) : [];
+    const title = headline || tidyTitle('', sentences) || 'Untitled';
+    const reading = withHeadline(title, sentences, paragraphs);
+    const next: Item = {
+      ...current,
+      title,
+      text: body,
+      status: 'ready',
+      sentences: reading.sentences,
+      paragraphs: reading.paragraphs,
+    };
+    setItems((list) => list.map((item) => (item.id === current.id ? next : item)));
+    setIndex(0);
+    setEditing(false);
+    note('Saved');
+    if (current.id.startsWith('paste-') || current.id.startsWith('pending-')) return;
+    try {
+      const row = await api.patch(current.id, { title, text: body });
+      const saved = { ...applyRow(row), position: current.position, text: body };
+      setItems((list) => list.map((item) => (item.id === current.id ? saved : item)));
+    } catch (err) {
+      if (authFailed(err)) signOut();
+      else note('Could not save that edit');
+    }
   }
 
   function accountControls() {
@@ -756,9 +927,27 @@ export function AppShell() {
       </div>
     );
   }
+  if (step === 'onboard' && account) {
+    return (
+      <div className="ll gate-page">
+        <SiteHeader />
+        <Onboarding
+          seconds={freeSeconds}
+          month={monthLabel}
+          year={yearLabel}
+          onDone={() => {
+            localStorage.setItem('ll-onboarded', account);
+            setTab('listen');
+            setStep('app');
+          }}
+        />
+        <SiteFooter />
+      </div>
+    );
+  }
 
   return (
-    <div className="ll app-shell" data-tour={step === 'onboard' ? (tab === 'listen' ? 'play' : tab === 'settings' ? 'plus' : 'add') : undefined}>
+    <div className="ll app-shell">
       <header className="brandbar">
         <div className="brand-side">
           <button
@@ -941,8 +1130,15 @@ export function AppShell() {
             </section>
             <section className="intake-card">
               <h2>Pasted copy</h2>
-              <p className="howto">Paste the article itself when a page will not open.</p>
-              <textarea className="area" placeholder="Paste the article text" value={textDraft} onChange={(event) => setTextDraft(event.target.value)} />
+              <p className="howto">Headline and the article, kept apart, when a page will not open.</p>
+              <label className="stack-label">
+                <span>Headline</span>
+                <input className="field" placeholder="Headline" aria-label="Headline" value={titleDraft} onChange={(event) => setTitleDraft(event.target.value)} />
+              </label>
+              <label className="stack-label">
+                <span>Body</span>
+                <textarea className="area" placeholder="Body copy" aria-label="Body" value={textDraft} onChange={(event) => setTextDraft(event.target.value)} />
+              </label>
               <button type="button" className="primary" onClick={addPasted}>
                 Add pasted copy
               </button>
@@ -952,20 +1148,40 @@ export function AppShell() {
               <p className="incoming-count">
                 {incoming.length} <span>incoming</span>
               </p>
-              <p className="howto">Newsletters forwarded to your save address wait here until you keep them.</p>
-              <div className="address">
-                <code>{SAVE_ADDRESS}</code>
-                <button
-                  type="button"
-                  className="ghost"
-                  onClick={() => {
-                    navigator.clipboard.writeText(SAVE_ADDRESS);
-                    note('Address copied');
-                  }}
-                >
-                  Copy
-                </button>
-              </div>
+              <p className="howto">
+                {saveAddress
+                  ? 'Forward a newsletter to this address. Links in the mail are saved to this account.'
+                  : 'Your save address appears here after an admin sets the inbound domain.'}
+              </p>
+              {saveAddress ? (
+                <div className="address">
+                  <code>
+                    {saveAddress.split(/(@)/).map((part, index) =>
+                      index % 2 === 1 ? (
+                        <span key={index}>
+                          {part}
+                          <wbr />
+                        </span>
+                      ) : (
+                        part
+                      )
+                    )}
+                  </code>
+                  <button
+                    type="button"
+                    className="ghost"
+                    onClick={() => {
+                      navigator.clipboard.writeText(saveAddress);
+                      note('Address copied');
+                    }}
+                  >
+                    Copy
+                  </button>
+                </div>
+              ) : null}
+              {saveAddress && !mailReceiving ? (
+                <p className="howto">Mail starts arriving after the inbound secret is saved in Admin and the domain points at the webhook.</p>
+              ) : null}
               {held.length > 0 ? (
                 <InboxItem
                   title={held[0].batch || 'Forwarded mail'}
@@ -1006,10 +1222,14 @@ export function AppShell() {
               <span>Voice</span>
               <span>{voices.find((voice) => voice.voiceURI === voiceId)?.name || 'This device'}</span>
             </button>
-            <button type="button" onClick={() => setSpeedI((n) => (n + 1) % SPEEDS.length)}>
+            <label className="settings-row">
               <span>Default speed</span>
-              <span>{SPEEDS[speedI]}×</span>
-            </button>
+              <select aria-label="Default speed" value={speed} onChange={(e) => setSpeedI(SPEEDS.indexOf(Number(e.target.value)))}>
+                {SPEEDS.map((rate) => (
+                  <option key={rate} value={rate}>{rate}×</option>
+                ))}
+              </select>
+            </label>
             <div className="settings-row">
               <span>Downloads</span>
               <span>Wi-Fi · next 10</span>
@@ -1035,29 +1255,54 @@ export function AppShell() {
             <FullPlayer
               episode={episode}
               playing={playing}
-              sentences={current?.sentences}
-              paragraphs={current?.paragraphs}
-              sentenceIndex={index}
+              sentences={view?.sentences}
+              paragraphs={view?.paragraphs}
+              sentenceIndex={index - (view?.offset || 0)}
               onToggle={toggle}
               onBack={() => setIndex((n) => Math.max(0, n - 4))}
               onForward={() => setIndex((n) => n + 2)}
-              onJump={setIndex}
+              onJump={(i) => setIndex(i + (view?.offset || 0))}
               speedLabel={`${speed}×`}
+              speeds={SPEEDS}
+              speed={speed}
               voiceLabel={voices.find((voice) => voice.voiceURI === voiceId)?.name || 'Voice'}
               voices={voices.map((voice) => ({ id: voice.voiceURI, label: `${voice.name} · ${voice.lang}` }))}
               voiceId={voiceId}
               sleepLabel={SLEEPS[sleepI]}
-              onSpeed={() => setSpeedI((n) => (n + 1) % SPEEDS.length)}
+              onPickSpeed={(rate) => setSpeedI(SPEEDS.indexOf(rate))}
               onPickVoice={pickVoice}
               onSleep={() => setSleepI((n) => (n + 1) % SLEEPS.length)}
               onScrub={(ratio) => current && setIndex(Math.round(ratio * (current.sentences.length - 1)))}
             />
             <div key={episode.id} className="now-read story-copy">
-              {episode.title && !copyOpensWith(episode.title, current?.sentences?.[0]) ? (
-                <h1 className="copy-title">{episode.title}</h1>
-              ) : null}
-              {episode.siteName ? <p className="copy-byline">{episode.siteName}</p> : null}
-              <SentenceHighlighter sentences={current?.sentences || []} paragraphs={current?.paragraphs} index={index} onJump={setIndex} />
+              <div className="copy-tools">
+                {editing ? (
+                  <>
+                    <button type="button" className="ghost" onClick={() => setEditing(false)}>Cancel</button>
+                    <button type="button" className="primary" onClick={() => void saveStory()}>Save</button>
+                  </>
+                ) : (
+                  <button type="button" className="ghost" onClick={beginEdit}>Edit</button>
+                )}
+              </div>
+              {editing ? (
+                <StoryFields title={editTitle} body={editBody} onTitle={setEditTitle} onBody={setEditBody} />
+              ) : (
+                <>
+                  {view?.title ? (
+                    <h1 className={view.offset && index < view.offset ? 'copy-title is-on' : 'copy-title'} onClick={() => view.offset && setIndex(0)}>
+                      {view.title}
+                    </h1>
+                  ) : null}
+                  {episode.siteName ? <p className="copy-byline">{episode.siteName}</p> : null}
+                  <SentenceHighlighter
+                    sentences={view?.sentences || []}
+                    paragraphs={view?.paragraphs}
+                    index={index - (view?.offset || 0)}
+                    onJump={(i) => setIndex(i + (view?.offset || 0))}
+                  />
+                </>
+              )}
             </div>
           </div>
         ) : (
@@ -1080,20 +1325,24 @@ export function AppShell() {
             episode={episode}
             playing={playing}
             showText={showText}
-            sentences={current?.sentences}
-            paragraphs={current?.paragraphs}
-            sentenceIndex={index}
+            sentences={view?.sentences}
+            paragraphs={view?.paragraphs}
+            sentenceIndex={index - (view?.offset || 0)}
             onToggle={toggle}
             onToggleText={() => setShowText((v) => !v)}
+            onEdit={beginEdit}
+            editor={editing ? <StoryFields title={editTitle} body={editBody} onTitle={setEditTitle} onBody={setEditBody} /> : undefined}
             onBack={() => setIndex((n) => Math.max(0, n - 4))}
             onForward={() => setIndex((n) => n + 2)}
-            onJump={setIndex}
+            onJump={(i) => setIndex(i + (view?.offset || 0))}
             speedLabel={`${speed}×`}
+            speeds={SPEEDS}
+            speed={speed}
             voiceLabel={voices.find((voice) => voice.voiceURI === voiceId)?.name || 'Voice'}
             voices={voices.map((voice) => ({ id: voice.voiceURI, label: `${voice.name} · ${voice.lang}` }))}
             voiceId={voiceId}
             sleepLabel={SLEEPS[sleepI]}
-            onSpeed={() => setSpeedI((n) => (n + 1) % SPEEDS.length)}
+            onPickSpeed={(rate) => setSpeedI(SPEEDS.indexOf(rate))}
             onPickVoice={pickVoice}
             onSleep={() => setSleepI((n) => (n + 1) % SLEEPS.length)}
             onScrub={(ratio) => current && setIndex(Math.round(ratio * (current.sentences.length - 1)))}
@@ -1105,17 +1354,6 @@ export function AppShell() {
         <div style={{ position: 'fixed', left: '50%', bottom: 120, transform: 'translateX(-50%)', zIndex: 40 }}>
           <Toast message={toast} />
         </div>
-      ) : null}
-      {step === 'onboard' && account ? (
-        <Onboarding
-          seconds={freeSeconds}
-          onStep={showTour}
-          onDone={() => {
-            localStorage.setItem('ll-onboarded', account);
-            setTab('add');
-            setStep('app');
-          }}
-        />
       ) : null}
       <SiteFooter />
     </div>

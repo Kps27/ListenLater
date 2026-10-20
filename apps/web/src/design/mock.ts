@@ -15,6 +15,7 @@ export type Item = {
   duration_min?: number;
   sentences: string[];
   paragraphs?: string[][];
+  text?: string;
   batch?: string;
   sender?: string;
   held?: boolean;
@@ -23,7 +24,7 @@ export type Item = {
 export const SAVE_ADDRESS = 'kp-7f3a@save.listenlater.app';
 
 export const VOICES = ['Samantha · en-US', 'Rishi · en-IN', 'Daniel · en-GB'];
-export const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2, 2.5];
+export const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5];
 export const SLEEPS = ['Off', '15 min', '30 min', '45 min', 'End of piece'] as const;
 
 const night = [

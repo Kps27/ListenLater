@@ -3,3 +3,4 @@ apps/api/data/
 apps/web/.next/
 .DS_Store
 *.sqlite
+apps/api/.env

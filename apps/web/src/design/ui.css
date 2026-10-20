@@ -40,9 +40,9 @@
   content: "";
   position: absolute;
   inset: 0;
-  background-image: radial-gradient(rgb(255 255 255 / 0.22) 0.6px, transparent 0.7px);
-  background-size: 3px 3px;
-  mix-blend-mode: overlay;
+  background-image: radial-gradient(rgb(255 255 255 / 0.16) 0.55px, transparent 0.7px);
+  background-size: 4px 4px;
+  mix-blend-mode: soft-light;
   pointer-events: none;
 }
 .cover-initials {
@@ -96,6 +96,7 @@
 .story-face h2,
 .story-face .source,
 .story-face .sub,
+.story-face .read-edit { align-self: flex-end; margin: 0 0 8px auto; color: #f3f0e8; border-color: rgb(255 255 255 / 0.28); }
 .story-face .prose {
   animation: story-settle 460ms var(--ease) 90ms both;
 }
@@ -413,6 +414,7 @@
   cursor: pointer;
 }
 .voice-menu button[aria-selected='true'] { background: var(--mark); }
+.speed-menu { min-width: 112px; }
 .read-peek {
   width: 100%;
   min-height: var(--hit);

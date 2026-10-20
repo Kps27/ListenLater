@@ -9,6 +9,7 @@ import { MiniPlayer } from '@/components/ui/MiniPlayer';
 import { QueueRow } from '@/components/ui/QueueRow';
 import { SentenceHighlighter } from '@/components/ui/SentenceHighlighter';
 import { Toast } from '@/components/ui/Toast';
+import { SPEEDS } from '@/design/mock';
 import type { Episode } from '@/design/types';
 import { formatQueued } from '@/design/types';
 
@@ -38,6 +39,7 @@ export default function GalleryPage() {
   const [text, setText] = useState(false);
   const [index, setIndex] = useState(1);
   const [toast, setToast] = useState('');
+  const [speedI, setSpeedI] = useState(3);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
 
   function setMode(next: 'light' | 'dark') {
@@ -100,6 +102,10 @@ export default function GalleryPage() {
               onToggle={() => setPlaying((v) => !v)}
               onToggleText={() => setText((v) => !v)}
               onJump={setIndex}
+              speedLabel={`${SPEEDS[speedI]}×`}
+              speeds={SPEEDS}
+              speed={SPEEDS[speedI]}
+              onPickSpeed={(rate) => setSpeedI(SPEEDS.indexOf(rate))}
             />
           </div>
         </section>

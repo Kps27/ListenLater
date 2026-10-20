@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import Database from 'better-sqlite3';
-import { ensureSite, publicSite, saveSite, checkout, loginAdmin, adminSite } from '../src/site.js';
+import { ensureSite, publicSite, saveSite, checkout, loginAdmin, adminSite, deleteAccount } from '../src/site.js';
 import { quoteCountry } from '../src/prices.js';
 
 function db() {
@@ -63,6 +63,26 @@ test('public site hides sign-in secrets and a blank secret keeps the stored one'
   assert.equal(raw.auth.apple_private_key, 'apple-pem');
   assert.equal(raw.auth.mail_password, 'mail-secret');
   assert.equal(raw.auth.google_client_id, 'google-client');
+});
+
+test('inbound domain is saved and the webhook secret stays hidden', () => {
+  const database = db();
+  const req = admin(database);
+  const view = saveSite(database, req, {
+    inbound_domain: 'https://Save.ListenLater.app/inbox',
+    inbound_provider: 'postmark',
+    inbound_webhook_secret: 'inbound-secret',
+  });
+  assert.equal(view.inbound_domain, 'save.listenlater.app');
+  assert.equal(view.inbound_provider, 'postmark');
+  assert.equal(view.inbound_webhook_secret, '');
+  assert.equal(view.inbound_secret_set, true);
+  assert.equal(view.inbound_receiving, true);
+  const pub = publicSite(database);
+  assert.equal(JSON.stringify(pub).includes('inbound-secret'), false);
+  const kept = saveSite(database, req, { inbound_webhook_secret: '' });
+  assert.equal(kept.inbound_secret_set, true);
+  assert.throws(() => saveSite(database, req, { inbound_domain: 'not a domain' }), /invalid_domain/);
 });
 
 test('blank secret on save keeps the stored secret', () => {
@@ -139,6 +159,12 @@ test('admin roster lists signed-up and paid accounts', () => {
   assert.equal(view.roster.paid[0].currency, 'INR');
   assert.equal(view.roster.paid[0].amount_cents, 100000);
   assert.equal(JSON.stringify(view.roster).includes('password'), false);
+  const removed = deleteAccount(database, admin(database), 'ada@listen.test');
+  assert.equal(removed.roster.counts.signed_up, 1);
+  assert.equal(removed.roster.counts.paid, 0);
+  assert.equal(removed.roster.users.some((person) => person.email === 'ada@listen.test'), false);
+  assert.equal(database.prepare('select count(*) as n from subscriptions').get().n, 0);
+  assert.throws(() => deleteAccount(database, admin(database), 'missing@listen.test'), (err) => err.code === 'not_found');
 });
 
 test('expired demo card is rejected', () => {

@@ -1,6 +1,29 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { randomBytes } from 'node:crypto';
+
+function loadLocalEnv() {
+  const file = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '.env');
+  if (!fs.existsSync(file)) return;
+  for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eq = trimmed.indexOf('=');
+    if (eq < 1) continue;
+    const key = trimmed.slice(0, eq).trim();
+    if (process.env[key] !== undefined) continue;
+    let value = trimmed.slice(eq + 1).trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    process.env[key] = value;
+  }
+}
+
+loadLocalEnv();
 import { openDb, rowToItem, uid } from './db.js';
 import { registerAuth, GUEST_ITEM_LIMIT, countActiveItems } from './auth.js';
 import { createUserSession } from './sessions.js';
@@ -10,7 +33,8 @@ import { ingestClientText } from './extract.js';
 import { canonicalUrl } from '../../../lib/model.js';
 import { buildTextPayload } from '../../../lib/cleanup.js';
 import { ensureAudioTable, getOrCreateAudioStub } from './audio.js';
-import { ensureSite, publicSite, adminSite, loginAdmin, saveSite, checkout, planForUser, readSite } from './site.js';
+import { ensureSite, publicSite, adminSite, loginAdmin, saveSite, deleteAccount, checkout, planForUser, profileForUser, readSite } from './site.js';
+import { acceptInbound } from './inbound.js';
 import { quoteCountry } from './prices.js';
 
 const PORT = Number(process.env.PORT || 3333);
@@ -154,10 +178,7 @@ app.get('/v1/site', async () => publicSite(db));
 
 app.get('/v1/prices', async (req) => quoteCountry(req.query?.country));
 
-app.get('/v1/admin/hint', async () => {
-  const custom = Boolean(process.env.LL_ADMIN_PASSWORD);
-  return { password: custom ? '' : 'listen-later-admin', custom };
-});
+app.get('/v1/admin/hint', async () => ({ custom: Boolean(process.env.LL_ADMIN_PASSWORD) }));
 
 app.post('/v1/admin/login', async (req, reply) => {
   const session = loginAdmin(db, req.body?.password);
@@ -171,6 +192,17 @@ app.get('/v1/admin/site', async (req, reply) => {
   return view;
 });
 
+app.delete('/v1/admin/accounts', async (req, reply) => {
+  try {
+    const view = deleteAccount(db, req, req.body?.email);
+    if (!view) return reply.code(401).send({ error: 'invalid_admin' });
+    return view;
+  } catch (e) {
+    if (e.code === 'not_found') return reply.code(404).send({ error: 'not_found' });
+    throw e;
+  }
+});
+
 app.put('/v1/admin/site', async (req, reply) => {
   try {
     const view = saveSite(db, req, req.body || {});
@@ -178,6 +210,7 @@ app.put('/v1/admin/site', async (req, reply) => {
     return view;
   } catch (e) {
     if (e.code === 'invalid_url') return reply.code(400).send({ error: 'invalid_url' });
+    if (e.code === 'invalid_domain') return reply.code(400).send({ error: 'invalid_domain' });
     throw e;
   }
 });
@@ -194,6 +227,13 @@ app.post('/v1/billing/checkout', async (req, reply) => {
 });
 
 app.get('/v1/me/plan', async (req) => planForUser(db, req.userId));
+
+app.get('/v1/me', async (req, reply) => {
+  if (!req.userId || req.isGuest) return reply.code(401).send({ error: 'sign_in_required' });
+  const profile = profileForUser(db, req.userId);
+  if (!profile) return reply.code(404).send({ error: 'not_found' });
+  return profile;
+});
 
 app.get('/v1/events', async (req, reply) => {
   reply.raw.writeHead(200, {
@@ -330,8 +370,13 @@ app.patch('/v1/items/:id', async (req, reply) => {
   for (const key of ['state', 'position', 'progress_sentence', 'title']) {
     if (p[key] !== undefined) {
       fields.push(`${key} = ?`);
-      vals.push(p[key]);
+      vals.push(key === 'title' ? String(p[key]).trim().slice(0, 300) : p[key]);
     }
+  }
+  if (typeof p.text === 'string') {
+    const payload = buildTextPayload(p.text.slice(0, 200000));
+    fields.push('text_body = ?', 'sentences_json = ?', 'word_count = ?', 'status = ?', 'fail_reason = ?');
+    vals.push(payload.text, JSON.stringify(payload.sentences), payload.word_count, 'ready', null);
   }
   if (p.state === 'listened' && !p.listened_at) {
     fields.push('listened_at = ?');
@@ -397,25 +442,52 @@ app.get('/v1/shares/:token', async (req, reply) => {
   return { source_url: row.source_url, title: row.title };
 });
 
-app.post('/v1/webhooks/inbound-email', async (req, reply) => {
-  const secret = process.env.LL_INBOUND_WEBHOOK_SECRET;
-  if (secret && req.headers['x-ll-secret'] !== secret) {
-    return reply.code(401).send({ error: 'invalid_signature' });
+app.addContentTypeParser('application/x-www-form-urlencoded', { parseAs: 'string' }, (req, body, done) => {
+  try {
+    const params = new URLSearchParams(body);
+    const parsed = {};
+    for (const [key, value] of params) parsed[key] = value;
+    done(null, parsed);
+  } catch (err) {
+    done(err);
   }
-  const to = req.body?.To || req.body?.to || '';
-  const slug = String(to).split('@')[0];
-  const user = db.prepare('select id from users where inbound_slug = ?').get(slug);
+});
+
+app.post('/v1/webhooks/inbound-email', async (req, reply) => {
+  const site = readSite(db);
+  const accepted = acceptInbound(site, req.headers, req.body || {});
+  if (accepted.error === 'invalid_signature') return reply.code(401).send({ error: 'invalid_signature' });
+  if (accepted.error) return reply.code(404).send({ error: 'unknown_inbox' });
+  const user = db.prepare('select id from users where inbound_slug = ?').get(accepted.slug);
   if (!user) return reply.code(404).send({ error: 'unknown_inbox' });
-  const urls = String(req.body?.TextBody || req.body?.text || '').match(/https?:\/\/[^\s]+/g) || [];
+  const from = String(accepted.mail.from || '').match(/[a-z0-9._+-]+@[a-z0-9.-]+/i)?.[0]?.toLowerCase() || '';
   const items = [];
-  for (const url of urls.slice(0, 10)) {
+  for (const url of accepted.urls) {
     const { item, created } = createItemRow(db, user.id, {
       source_url: url,
       source_channel: 'email',
       status: 'queued',
+      author: from || null,
+      title: accepted.mail.subject || null,
     });
     if (created) enqueueExtract(db, item.id);
     items.push(item);
+  }
+  if (!items.length && accepted.mail.text) {
+    const payload = buildTextPayload(accepted.mail.text);
+    if ((payload.word_count || 0) >= 40) {
+      const { item } = createItemRow(db, user.id, {
+        source_channel: 'email',
+        title: accepted.mail.subject || 'Forwarded letter',
+        author: from || null,
+        site_name: from ? from.split('@')[1] : 'Forwarded mail',
+        word_count: payload.word_count,
+        text_body: payload.text,
+        sentences_json: JSON.stringify(payload.sentences),
+        status: 'ready',
+      });
+      items.push(item);
+    }
   }
   return { items };
 });

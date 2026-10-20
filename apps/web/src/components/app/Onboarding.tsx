@@ -4,52 +4,55 @@ import { useState } from 'react';
 
 const STEPS = [
   {
-    title: 'Add a story',
-    body: 'This is Add. Paste a link, or paste the article itself when a page will not open. It joins your Listen list.',
-    place: 'right',
+    title: 'Your library starts empty.',
+    body: 'Nothing is waiting here. Add the first story when you are ready.',
   },
   {
-    title: 'Press play',
-    body: 'This is the player. Press play. The sentence you are hearing is marked, and you can tap a line to jump.',
-    place: 'left',
+    title: 'Add a story.',
+    body: 'Paste a link, or paste the article itself when a page will not open. It joins Listen.',
   },
   {
-    title: 'Free, then Plus',
-    body: '',
-    place: 'right',
+    title: 'Press play.',
+    body: 'The sentence you are hearing is marked. Tap a line to jump.',
   },
 ] as const;
 
-export function Onboarding({ seconds, onDone, onStep }: { seconds: number; onDone: () => void; onStep: (index: number) => void }) {
+export function Onboarding({
+  seconds,
+  month,
+  year,
+  onDone,
+}: {
+  seconds: number;
+  month: string;
+  year: string;
+  onDone: () => void;
+}) {
   const [step, setStep] = useState(0);
   const current = STEPS[step];
-  const body = step === 2
-    ? `Each story includes ${seconds} seconds on the free plan. Plus continues past that preview. Use on Plus is capped in the terms.`
+  const last = step === STEPS.length - 1;
+  const body = last
+    ? `${current.body} Each story includes ${seconds} seconds on the free plan. Plus is ${month} a month, or ${year} a year.`
     : current.body;
 
-  function go(next: number) {
-    setStep(next);
-    onStep(next);
-  }
-
   return (
-    <div className={`tour-card tour-${current.place}`} role="dialog" aria-modal="false" aria-labelledby="tour-title">
-      <p className="eyebrow">How it works</p>
-      <h2 id="tour-title">{current.title}</h2>
+    <main className="welcome-screen">
+      <p className="eyebrow">Welcome</p>
+      <h1>{current.title}</h1>
       <p className="lede">{body}</p>
       <div className="onboard-dots" role="tablist" aria-label="Onboarding steps">
         {STEPS.map((item, index) => (
-          <button key={item.title} type="button" aria-label={item.title} aria-current={index === step ? 'step' : undefined} onClick={() => go(index)} />
+          <button key={item.title} type="button" aria-label={item.title} aria-current={index === step ? 'step' : undefined} onClick={() => setStep(index)} />
         ))}
       </div>
       <div className="onboard-actions">
-        <button type="button" className="primary" onClick={() => (step === STEPS.length - 1 ? onDone() : go(step + 1))}>
-          Next
+        <button type="button" className="primary" onClick={() => (last ? onDone() : setStep((n) => n + 1))}>
+          {last ? 'Start listening' : 'Next'}
         </button>
         <button type="button" className="ghost" onClick={onDone}>
           Skip
         </button>
       </div>
-    </div>
+    </main>
   );
 }

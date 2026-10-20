@@ -47,19 +47,19 @@ export function authVerify(email: string, pin: string) {
   return publicPost<{ token: string; email: string; needs_password: boolean }>('/v1/auth/pin/verify', {
     email,
     pin,
-    adopt_guest: true,
+    adopt_guest: false,
   });
 }
 
 export function authLogin(email: string, password: string) {
-  return publicPost<{ token: string; email: string }>('/v1/auth/login', { email, password, adopt_guest: true });
+  return publicPost<{ token: string; email: string }>('/v1/auth/login', { email, password, adopt_guest: false });
 }
 
 export async function login(email: string, display_name?: string) {
   const res = await fetch(`${apiBase()}/v1/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({ email, display_name, adopt_guest: true }),
+    body: JSON.stringify({ email, display_name, adopt_guest: false }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));

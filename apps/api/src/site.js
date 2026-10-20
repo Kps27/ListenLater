@@ -2,6 +2,7 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { uid } from './db.js';
 import { authPublic } from './accounts.js';
 import { quoteCountry } from './prices.js';
+import { inboundReceiving, normalizeInboundDomain, normalizeInboundProvider, saveAddress } from './inbound.js';
 
 const YEAR = new Date().getFullYear();
 
@@ -40,6 +41,9 @@ export const DEFAULTS = {
   razorpay_key_secret: '',
   prices: { month_cents: 100, year_cents: 1000, currency: 'USD' },
   free_listen_seconds: 60,
+  inbound_domain: '',
+  inbound_provider: 'webhook',
+  inbound_webhook_secret: '',
   auth: {
     google_client_id: '',
     google_client_secret: '',
@@ -229,6 +233,8 @@ function adminRoster(db) {
   const planExpr = userCols.has('plan') ? 'u.plan' : "'free'";
   const nameExpr = userCols.has('display_name') ? 'u.display_name' : "''";
   const joinedExpr = userCols.has('created_at') ? 'u.created_at' : "''";
+  const slugExpr = userCols.has('inbound_slug') ? 'u.inbound_slug' : "''";
+  const inboundDomain = readSite(db).inbound_domain || '';
   const deletedSql = userCols.has('deleted_at') ? 'and u.deleted_at is null' : '';
   const itemCols = tableCols(db, 'items');
   const storyExpr = itemCols.has('user_id') ? '(select count(*) from items i where i.user_id = u.id)' : '0';
@@ -240,7 +246,7 @@ function adminRoster(db) {
   const people = db
     .prepare(
       `select u.id as id, u.email as email, ${nameExpr} as display_name, ${planExpr} as plan,
-              ${joinedExpr} as created_at, ${storyExpr} as stories, ${seenExpr} as last_sign_in
+              ${slugExpr} as inbound_slug, ${joinedExpr} as created_at, ${storyExpr} as stories, ${seenExpr} as last_sign_in
        from users u
        where u.email is not null and trim(u.email) != '' and u.id != 'user-guest' ${deletedSql}
        order by created_at desc`
@@ -273,6 +279,7 @@ function adminRoster(db) {
       name: person.display_name || '',
       plan: paid ? 'plus' : 'free',
       stories: Number(person.stories) || 0,
+      save_address: saveAddress(inboundDomain, person.inbound_slug),
       joined: person.created_at || '',
       last_sign_in: person.last_sign_in || '',
     };
@@ -327,6 +334,26 @@ function adminRoster(db) {
   return { counts, users, paid };
 }
 
+function hasTable(db, table) {
+  return Boolean(db.prepare(`select name from sqlite_master where type = 'table' and name = ?`).get(table));
+}
+
+export function deleteAccount(db, req, email) {
+  if (!adminOk(db, req)) return null;
+  const normalized = String(email || '').trim().toLowerCase();
+  if (!normalized) throw Object.assign(new Error('not_found'), { code: 'not_found' });
+  const user = db.prepare(`select id from users where lower(email) = ?`).get(normalized);
+  if (!user || user.id === 'user-guest') throw Object.assign(new Error('not_found'), { code: 'not_found' });
+  const id = user.id;
+  if (hasTable(db, 'items')) db.prepare('delete from items where user_id = ?').run(id);
+  if (hasTable(db, 'api_sessions')) db.prepare('delete from api_sessions where user_id = ?').run(id);
+  if (hasTable(db, 'shares')) db.prepare('delete from shares where user_id = ?').run(id);
+  if (hasTable(db, 'subscriptions')) db.prepare('delete from subscriptions where lower(email) = ?').run(normalized);
+  if (hasTable(db, 'login_pins')) db.prepare('delete from login_pins where lower(email) = ?').run(normalized);
+  db.prepare('delete from users where id = ?').run(id);
+  return adminSite(db, req);
+}
+
 export function adminSite(db, req) {
   if (!adminOk(db, req)) return null;
   const site = readSite(db);
@@ -339,6 +366,12 @@ export function adminSite(db, req) {
     razorpay_key_id: site.razorpay_key_id || '',
     razorpay_key_secret: '',
     razorpay_secret_set: Boolean(site.razorpay_key_secret),
+    inbound_domain: site.inbound_domain || '',
+    inbound_provider: site.inbound_provider || 'webhook',
+    inbound_webhook_secret: '',
+    inbound_secret_set: Boolean(site.inbound_webhook_secret),
+    inbound_env_secret: Boolean(process.env.LL_INBOUND_WEBHOOK_SECRET),
+    inbound_receiving: inboundReceiving(site),
     auth_secrets: {
       google_client_id: site.auth.google_client_id || '',
       google_client_secret: '',
@@ -432,6 +465,9 @@ export function saveSite(db, req, patch) {
     razorpay_key_secret: clip(patch.razorpay_key_secret, 200) || current.razorpay_key_secret,
     prices,
     free_listen_seconds: clampInt(patch.free_listen_seconds, 10, 3600, current.free_listen_seconds),
+    inbound_domain: patch.inbound_domain !== undefined ? normalizeInboundDomain(patch.inbound_domain) : current.inbound_domain,
+    inbound_provider: normalizeInboundProvider(patch.inbound_provider, current.inbound_provider),
+    inbound_webhook_secret: clip(patch.inbound_webhook_secret, 200) || current.inbound_webhook_secret,
     auth: authFromPatch(current.auth, patch.auth),
   };
   writeSite(db, next);
@@ -488,6 +524,24 @@ export function checkout(db, body) {
     currency,
     charged: false,
     email,
+  };
+}
+
+export function profileForUser(db, userId) {
+  const cols = new Set(db.prepare('pragma table_info(users)').all().map((col) => col.name));
+  if (!cols.has('id')) return null;
+  const slugExpr = cols.has('inbound_slug') ? 'inbound_slug' : "''";
+  const nameExpr = cols.has('display_name') ? 'display_name' : "''";
+  const emailExpr = cols.has('email') ? 'email' : "''";
+  const user = db.prepare(`select ${emailExpr} as email, ${nameExpr} as display_name, ${slugExpr} as inbound_slug from users where id = ?`).get(userId);
+  if (!user) return null;
+  const site = readSite(db);
+  return {
+    email: user.email || '',
+    name: user.display_name || '',
+    inbound_slug: user.inbound_slug || '',
+    save_address: saveAddress(site.inbound_domain, user.inbound_slug),
+    receiving: inboundReceiving(site),
   };
 }
 

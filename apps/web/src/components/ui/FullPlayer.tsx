@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { Episode } from '@/design/types';
 import { Cover } from './Cover';
 import { IconPause, IconPlay } from './Icons';
@@ -51,13 +51,18 @@ export function FullPlayer({
   onBack,
   onForward,
   onToggleText,
+  onEdit,
+  editor,
   onJump,
   speedLabel,
+  speeds,
+  speed,
   voiceLabel,
   voices,
   voiceId,
   sleepLabel,
   onSpeed,
+  onPickSpeed,
   onPickVoice,
   onSleep,
   onScrub,
@@ -72,26 +77,41 @@ export function FullPlayer({
   onBack?: () => void;
   onForward?: () => void;
   onToggleText?: () => void;
+  onEdit?: () => void;
+  editor?: ReactNode;
   onJump?: (i: number) => void;
   speedLabel?: string;
+  speeds?: number[];
+  speed?: number;
   voiceLabel?: string;
   voices?: VoiceOption[];
   voiceId?: string;
   sleepLabel?: string;
   onSpeed?: () => void;
+  onPickSpeed?: (rate: number) => void;
   onPickVoice?: (id: string) => void;
   onSleep?: () => void;
   onScrub?: (ratio: number) => void;
 }) {
   const [voicesOpen, setVoicesOpen] = useState(false);
+  const [speedOpen, setSpeedOpen] = useState(false);
   const max = Math.max(episode.durationMin * 60, 1);
   const value = Math.round(episode.progress * max);
   return (
     <section className={playing ? 'player is-live' : 'player'} aria-label="Now playing">
       <PlayBokeh />
       <div key={episode.id} className="story-face">
-        {showText && sentences ? (
-          <SentenceHighlighter sentences={sentences} paragraphs={paragraphs} index={sentenceIndex ?? 0} onJump={onJump} />
+        {showText && editor ? (
+          editor
+        ) : showText && sentences ? (
+          <>
+            {onEdit ? (
+              <button type="button" className="ghost read-edit" onClick={onEdit}>
+                Edit
+              </button>
+            ) : null}
+            <SentenceHighlighter sentences={sentences} paragraphs={paragraphs} index={sentenceIndex ?? 0} onJump={onJump} />
+          </>
         ) : (
           <Cover name={episode.siteName} size="lg" />
         )}
@@ -127,14 +147,54 @@ export function FullPlayer({
         </button>
       </div>
       <div className="row-controls">
-        <button type="button" className="ghost" onClick={onSpeed}>{speedLabel || '1.2×'}</button>
+        <div className="voice-picker">
+          <button
+            type="button"
+            className="ghost"
+            aria-expanded={speedOpen}
+            aria-haspopup="listbox"
+            aria-label="Playback speed"
+            onClick={() => {
+              if (!speeds?.length) {
+                onSpeed?.();
+                return;
+              }
+              setVoicesOpen(false);
+              setSpeedOpen((open) => !open);
+            }}
+          >
+            {speedLabel || '1.25×'}
+          </button>
+          {speedOpen && speeds?.length ? (
+            <ul className="voice-menu speed-menu" role="listbox" aria-label="Playback speed">
+              {speeds.map((rate) => (
+                <li key={rate}>
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={rate === speed}
+                    onClick={() => {
+                      onPickSpeed?.(rate);
+                      setSpeedOpen(false);
+                    }}
+                  >
+                    {rate}×
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
         <div className="voice-picker">
           <button
             type="button"
             className="ghost"
             aria-expanded={voicesOpen}
             aria-haspopup="listbox"
-            onClick={() => setVoicesOpen((open) => !open)}
+            onClick={() => {
+              setSpeedOpen(false);
+              setVoicesOpen((open) => !open);
+            }}
           >
             {voiceLabel || 'Voice'}
           </button>
