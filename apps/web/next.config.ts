@@ -1,6 +1,6 @@
 import type { NextConfig } from 'next';
 
-const SHARE_API = 'https://edinburgh-dialog-true-fact.trycloudflare.com';
+const SHARE_API = 'https://bye-portraits-eagles-asking.trycloudflare.com';
 
 const nextConfig: NextConfig = {
   experimental: { externalDir: true },
