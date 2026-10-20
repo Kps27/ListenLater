@@ -1,0 +1,50 @@
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: deploy/aws/Dockerfile.api
+    environment:
+      LL_DATA_DIR: /data
+      LL_PLAYWRIGHT: "0"
+      PORT: "3333"
+      LL_ADMIN_PASSWORD: ${LL_ADMIN_PASSWORD}
+      LL_INBOUND_WEBHOOK_SECRET: ${LL_INBOUND_WEBHOOK_SECRET:-}
+      LL_WEB_URL: https://${WEB_DOMAIN}
+    volumes:
+      - ll-data:/data
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ../..
+      dockerfile: deploy/aws/Dockerfile.web
+      args:
+        NEXT_PUBLIC_API_URL: https://${API_DOMAIN}
+    environment:
+      PORT: "3000"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2.8
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      WEB_DOMAIN: ${WEB_DOMAIN}
+      API_DOMAIN: ${API_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - web
+      - api
+    restart: unless-stopped
+
+volumes:
+  ll-data:
+  caddy-data:
+  caddy-config:

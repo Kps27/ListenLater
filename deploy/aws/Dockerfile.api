@@ -1,0 +1,26 @@
+FROM node:22-bookworm-slim
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends python3 make g++ \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY package.json package-lock.json ./
+COPY apps/api/package.json apps/api/package.json
+COPY apps/web/package.json apps/web/package.json
+COPY apps/mobile/package.json apps/mobile/package.json
+COPY extensions/chrome/package.json extensions/chrome/package.json
+COPY lib ./lib
+COPY apps/api ./apps/api
+
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
+    LL_PLAYWRIGHT=0 \
+    LL_DATA_DIR=/data \
+    PORT=3333 \
+    NODE_ENV=production
+
+RUN npm ci -w @listen-later/api --omit=dev
+
+WORKDIR /app/apps/api
+EXPOSE 3333
+CMD ["node", "src/index.js"]

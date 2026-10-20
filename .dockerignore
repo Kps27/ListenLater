@@ -1,0 +1,12 @@
+.git
+node_modules
+**/node_modules
+**/.next
+apps/api/data
+**/*.sqlite
+**/*.sqlite-*
+**/*.sqlite-wal
+**/*.sqlite-shm
+.env
+apps/api/.env
+apps/mobile/.claude

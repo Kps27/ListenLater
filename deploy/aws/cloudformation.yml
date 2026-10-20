@@ -1,0 +1,115 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Listen Later on one always-on EC2 instance. The website, the API, and the
+  SQLite file live on this machine. Point WebDomain and ApiDomain at the
+  elastic IP, copy the repo to /opt/listen-later, then start listen-later.service.
+
+Parameters:
+  WebDomain:
+    Type: String
+    Description: Public site name, for example listenlater.example.com
+  ApiDomain:
+    Type: String
+    Description: API name, for example api.listenlater.example.com
+  AcmEmail:
+    Type: String
+    Description: Email for the TLS certificate
+  AdminPassword:
+    Type: String
+    NoEcho: true
+    MinLength: 12
+    Description: Admin password. It is not shown on the site.
+  InstanceType:
+    Type: String
+    Default: t3.small
+  LatestAmi:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+
+Resources:
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref InstanceRole
+
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Listen Later web and API
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+
+  Server:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref LatestAmi
+      InstanceType: !Ref InstanceType
+      IamInstanceProfile: !Ref InstanceProfile
+      SecurityGroupIds:
+        - !Ref SecurityGroup
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 30
+            VolumeType: gp3
+            DeleteOnTermination: false
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -eux
+          dnf install -y docker
+          systemctl enable --now docker
+          mkdir -p /usr/local/lib/docker/cli-plugins /usr/lib/docker/cli-plugins /opt/listen-later/data
+          curl -fsSL -o /usr/local/lib/docker/cli-plugins/docker-compose \
+            https://github.com/docker/compose/releases/download/v2.32.4/docker-compose-linux-x86_64
+          chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+          cp /usr/local/lib/docker/cli-plugins/docker-compose /usr/lib/docker/cli-plugins/docker-compose
+          cat > /etc/listen-later.env <<'ENV'
+          WEB_DOMAIN=${WebDomain}
+          API_DOMAIN=${ApiDomain}
+          ACME_EMAIL=${AcmEmail}
+          LL_ADMIN_PASSWORD=${AdminPassword}
+          LL_INBOUND_WEBHOOK_SECRET=
+          ENV
+          echo "Copy the repo to /opt/listen-later. Then: cp /etc/listen-later.env /opt/listen-later/deploy/aws/.env && cp /opt/listen-later/deploy/aws/listen-later.service /etc/systemd/system/ && systemctl enable --now listen-later" > /etc/listen-later-next.txt
+      Tags:
+        - Key: Name
+          Value: listen-later
+
+  Address:
+    Type: AWS::EC2::EIP
+    Properties:
+      InstanceId: !Ref Server
+      Domain: vpc
+
+Outputs:
+  PublicIp:
+    Value: !Ref Address
+  WebUrl:
+    Value: !Sub https://${WebDomain}
+  ApiUrl:
+    Value: !Sub https://${ApiDomain}
+  Dns:
+    Description: Create these two A records at the domain host, both aimed at PublicIp.
+    Value: !Sub "${WebDomain} and ${ApiDomain} -> ${Address}"

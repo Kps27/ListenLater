@@ -1,0 +1,14 @@
+[Unit]
+Description=Listen Later
+After=docker.service
+Requires=docker.service
+
+[Service]
+WorkingDirectory=/opt/listen-later
+ExecStart=/usr/bin/docker compose -f deploy/aws/docker-compose.yml --env-file deploy/aws/.env up -d --build
+ExecStop=/usr/bin/docker compose -f deploy/aws/docker-compose.yml --env-file deploy/aws/.env down
+RemainAfterExit=yes
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target
