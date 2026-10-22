@@ -73,8 +73,8 @@
   letter-spacing: 0.04em;
 }
 .progress-ring svg { position: absolute; inset: 0; width: 48px; height: 48px; transform: rotate(-90deg); }
-.progress-ring circle { fill: none; stroke-width: 2.5; }
-.progress-ring .track { stroke: var(--line); }
+.progress-ring circle { fill: none; stroke-width: 3; }
+.progress-ring .track { stroke: color-mix(in srgb, var(--ink) 28%, transparent); }
 .progress-ring .prog {
   stroke: var(--copper-fill);
   stroke-linecap: round;
@@ -162,6 +162,8 @@
   margin: 0;
   color: #f6f3ff;
 }
+.episode .scrub { width: 100%; accent-color: #7c6bff; }
+.episode .times { width: 100%; color: #d4ceea; }
 .episode .play { width: 64px; height: 64px; }
 .episode .play svg { width: 24px; height: 24px; }
 .episode .row-controls { width: 100%; }

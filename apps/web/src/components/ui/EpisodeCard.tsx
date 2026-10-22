@@ -8,13 +8,17 @@ export function EpisodeCard({
   episode,
   playing,
   onToggle,
+  onScrub,
   controls,
 }: {
   episode: Episode;
   playing?: boolean;
   onToggle?: () => void;
+  onScrub?: (ratio: number) => void;
   controls?: ReactNode;
 }) {
+  const max = Math.max(episode.durationMin * 60, 1);
+  const value = Math.round(episode.progress * max);
   return (
     <article className="episode">
       <PlayBokeh />
@@ -23,13 +27,22 @@ export function EpisodeCard({
         <p className="source">{episode.siteName}</p>
         <h2>{episode.title}</h2>
       </div>
+      <input
+        className="scrub"
+        type="range"
+        min={0}
+        max={max}
+        value={value}
+        aria-label="Position"
+        onChange={(e) => onScrub?.(Number(e.target.value) / max)}
+      />
+      <div className="times">
+        <span>{episode.elapsedLabel || '0:00'}</span>
+        <span>{episode.durationMin}:00</span>
+      </div>
       <button type="button" className="play" onClick={onToggle} aria-label={playing ? 'Pause' : 'Play'}>
         {playing ? <IconPause /> : <IconPlay />}
       </button>
-      <p className="meta">
-        {episode.durationMin} min
-        {episode.elapsedLabel ? ` · ${episode.elapsedLabel} in` : ''}
-      </p>
       {controls}
     </article>
   );

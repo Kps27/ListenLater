@@ -686,7 +686,7 @@
     max-width: 100%;
     min-width: 0;
   }
-  .stage .progress-ring { overflow: hidden; }
+  .stage .progress-ring { overflow: visible; }
   .stage .queue-main .t { font-size: 0.95rem; }
   .stage .queue-main .m { font-size: 0.75rem; }
   .stage .progress-ring,

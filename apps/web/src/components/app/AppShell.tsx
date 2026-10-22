@@ -1058,6 +1058,7 @@ export function AppShell() {
                   episode={episode}
                   playing={playing}
                   onToggle={toggle}
+                  onScrub={(ratio) => current && setIndex(Math.round(ratio * (current.sentences.length - 1)))}
                   controls={
                     <PlaybackControls
                       speedLabel={`${speed}×`}
@@ -1108,7 +1109,7 @@ export function AppShell() {
                   onDrop={() => reorder(item.id)}
                 >
                   <QueueRow
-                    episode={toEpisode(item)}
+                    episode={toEpisode(item.id === currentId ? { ...item, progress_sentence: index } : item)}
                     meta={
                       item.status !== 'ready'
                         ? `${kindName(sourceKind(item))} · Getting the article…`
