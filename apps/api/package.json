@@ -12,6 +12,7 @@
     "better-sqlite3": "^11.8.0",
     "fastify": "^5.2.1",
     "linkedom": "^0.18.9",
+    "nodemailer": "^7.0.13",
     "playwright": "^1.51.0"
   }
 }

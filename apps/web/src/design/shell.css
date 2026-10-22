@@ -600,6 +600,12 @@
 @media (max-width: 1279px) {
   .brandbar { flex-wrap: wrap; }
   .brand-end { flex: 1 0 100%; }
+  .app-shell .brand-side {
+    flex: 1 1 auto;
+    width: 100%;
+    justify-content: space-between;
+  }
+  .app-shell .brand-side .menu-toggle { order: 2; }
   .band-nav { width: 100%; }
   .band-nav .nav-item {
     flex: 1;
@@ -610,7 +616,7 @@
 @media (min-width: 1280px) {
   .menu-toggle { display: none; }
   .brand-actions { display: flex; }
-  .nav-scrim, .nav-drawer { display: none; }
+  .nav-scrim, .nav-drawer, .app-shell .nav-overlay { display: none; }
   .app-shell {
     display: grid;
     grid-template-columns: 22% 25% 53%;
@@ -745,6 +751,15 @@
 .app-shell .filters { margin-bottom: 6px; }
 .app-shell .filters .ghost { min-height: 36px; }
 .app-shell .topbar { display: none; }
+.app-shell .brandbar:has(+ .nav-overlay) {
+  position: sticky;
+  top: 0;
+  z-index: 90;
+  background: transparent;
+}
+.app-shell .brandbar:has(+ .nav-overlay) .brand-end {
+  visibility: hidden;
+}
 @media (max-width: 767px) {
   .app-shell .site-footer { display: none; }
   .app-shell .brandbar {
@@ -753,7 +768,10 @@
     z-index: 6;
     flex-wrap: nowrap;
     background: color-mix(in srgb, var(--bg) 92%, transparent);
-    backdrop-filter: blur(14px);
+  }
+  .app-shell .brandbar:has(+ .nav-overlay) {
+    z-index: 90;
+    background: transparent;
   }
   .app-shell .brand-end {
     position: fixed;
@@ -771,6 +789,7 @@
   .app-shell .band-nav { width: 100%; }
   .app-shell .dock { bottom: calc(62px + env(safe-area-inset-bottom)); }
   .app-shell .stage { padding-bottom: calc(148px + env(safe-area-inset-bottom)); }
+  .listen-hero .episode { margin-inline: 18px; }
   .app-shell .tour-card { bottom: calc(132px + env(safe-area-inset-bottom)); }
   .player-sheet { z-index: 40; padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
 }

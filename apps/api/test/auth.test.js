@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import Database from 'better-sqlite3';
-import { accountStatus, issuePin, loginWithPassword, setPassword, verifyPin } from '../src/accounts.js';
+import { accountStatus, deliverPin, issuePin, loginWithPassword, setPassword, verifyPin } from '../src/accounts.js';
 
 function db() {
   const database = new Database(':memory:');
@@ -57,4 +57,22 @@ test('a saved mail sender still returns the code until sending is connected', ()
   const issued = issuePin(database, 'ada@listen.test', true);
   assert.equal(issued.sender, 'saved');
   assert.match(issued.preview_pin, /^\d{6}$/);
+});
+
+test('a complete mail sender emails the code and hides it', async () => {
+  const database = db();
+  const issued = issuePin(database, 'ada@listen.test', true);
+  const sent = [];
+  const delivered = await deliverPin(
+    issued,
+    { mail_host: 'smtp.example.com', mail_port: '587', mail_from: 'welcome@listenlater.in', mail_user: 'welcome@listenlater.in', mail_password: 'secret' },
+    async (message) => {
+      sent.push(message);
+    }
+  );
+  assert.equal(delivered.delivery, 'email');
+  assert.equal(delivered.preview_pin, null);
+  assert.equal(sent[0].to, 'ada@listen.test');
+  assert.equal(sent[0].pin, issued.preview_pin);
+  assert.equal(sent[0].from, 'welcome@listenlater.in');
 });

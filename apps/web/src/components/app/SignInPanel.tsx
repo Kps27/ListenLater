@@ -13,6 +13,7 @@ function message(code: string | undefined) {
   if (code === 'invalid_password') return 'That password does not match.';
   if (code === 'weak_password') return 'Use at least 8 characters.';
   if (code === 'needs_pin') return 'Email yourself a code first, then choose a password.';
+  if (code === 'mail_failed') return 'The code could not be emailed. Check the mail settings in Admin.';
   return 'Sign in did not reach the server.';
 }
 
@@ -191,9 +192,11 @@ export function SignInPanel({
         {step === 'pin' ? (
           <>
             <p className="fine">
-              {sender === 'saved'
-                ? 'A mail sender is saved in Admin. Sending is not connected yet, so use this code.'
-                : 'Mail is not connected yet. Use this code, then choose a password.'}
+              {preview
+                ? sender === 'saved'
+                  ? 'A mail sender is saved in Admin. Sending is not connected yet, so use this code.'
+                  : 'Mail is not connected yet. Use this code, then choose a password.'
+                : `We emailed a code to ${email}. It expires in 10 minutes.`}
             </p>
             {preview ? <p className="pin-preview">{preview}</p> : null}
             <div className="signin-options">

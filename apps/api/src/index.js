@@ -27,7 +27,8 @@ loadLocalEnv();
 import { openDb, rowToItem, uid } from './db.js';
 import { registerAuth, GUEST_ITEM_LIMIT, countActiveItems } from './auth.js';
 import { createUserSession } from './sessions.js';
-import { accountStatus, issuePin, loginWithPassword, setPassword, verifyPin } from './accounts.js';
+import { accountStatus, deliverPin, issuePin, loginWithPassword, setPassword, verifyPin } from './accounts.js';
+import { sendLoginCode } from './mail.js';
 import { enqueueExtract, startWorker } from './worker.js';
 import { ingestClientText } from './extract.js';
 import { canonicalUrl } from '../../../lib/model.js';
@@ -130,9 +131,14 @@ app.post('/v1/auth/start', async (req, reply) => {
 
 app.post('/v1/auth/pin', async (req, reply) => {
   try {
-    const mail = Boolean(readSite(db).auth?.mail_host);
-    return issuePin(db, req.body?.email, mail);
+    const auth = readSite(db).auth || {};
+    const issued = issuePin(db, req.body?.email, Boolean(auth.mail_host));
+    return await deliverPin(issued, auth, sendLoginCode);
   } catch (e) {
+    if (e.code === 'mail_failed') {
+      req.log.error({ err: e.cause || e }, 'login code email failed');
+      return reply.code(502).send({ error: 'mail_failed' });
+    }
     return authError(reply, e);
   }
 });

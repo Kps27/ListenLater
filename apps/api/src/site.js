@@ -53,6 +53,7 @@ export const DEFAULTS = {
     apple_private_key: '',
     mail_from: '',
     mail_host: '',
+    mail_port: '587',
     mail_user: '',
     mail_password: '',
   },
@@ -175,6 +176,7 @@ function authFromPatch(current, patch) {
     apple_private_key: keep(next.apple_private_key, stored.apple_private_key, 4000),
     mail_from: text(next.mail_from, stored.mail_from, 160),
     mail_host: text(next.mail_host, stored.mail_host, 200),
+    mail_port: /^\d{2,5}$/.test(text(next.mail_port, stored.mail_port, 5)) ? text(next.mail_port, stored.mail_port, 5) : '587',
     mail_user: text(next.mail_user, stored.mail_user, 160),
     mail_password: keep(next.mail_password, stored.mail_password, 200),
   };
@@ -383,6 +385,7 @@ export function adminSite(db, req) {
       apple_key_set: Boolean(site.auth.apple_private_key),
       mail_from: site.auth.mail_from || '',
       mail_host: site.auth.mail_host || '',
+      mail_port: site.auth.mail_port || '587',
       mail_user: site.auth.mail_user || '',
       mail_password: '',
       mail_password_set: Boolean(site.auth.mail_password),

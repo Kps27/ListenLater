@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { EpisodeCard } from '@/components/ui/EpisodeCard';
-import { FullPlayer } from '@/components/ui/FullPlayer';
+import { FullPlayer, PlaybackControls } from '@/components/ui/FullPlayer';
 import { InboxItem } from '@/components/ui/InboxItem';
 import { MiniPlayer } from '@/components/ui/MiniPlayer';
 import { QueueRow } from '@/components/ui/QueueRow';
@@ -348,6 +348,8 @@ export function AppShell() {
     } else {
       setStep('signin');
     }
+    const requested = new URLSearchParams(window.location.search).get('tab');
+    if (requested === 'listen' || requested === 'add' || requested === 'settings') setTab(requested);
     try {
       const savedHeard = JSON.parse(localStorage.getItem('ll-heard-by-story') || '{}') as Record<string, number>;
       if (savedHeard && typeof savedHeard === 'object') setHeardMap(savedHeard);
@@ -984,13 +986,33 @@ export function AppShell() {
         </div>
       </header>
       {menuOpen ? (
-        <>
-          <button type="button" className="nav-scrim" aria-label="Close menu" onClick={() => setMenuOpen(false)} />
-          <div className="nav-drawer" id="app-menu" role="dialog" aria-label="Account">
-            <p className="nav-kicker">Account</p>
-            <div className="nav-account">{accountControls()}</div>
-          </div>
-        </>
+        <div className="nav-overlay" id="app-menu" role="dialog" aria-modal="true" aria-label="Menu">
+          <nav aria-label="Menu">
+            <Link href="/" className="nav-text" onClick={() => setMenuOpen(false)}>
+              Home
+            </Link>
+            <button type="button" className="nav-text" onClick={() => { setMenuOpen(false); setTab('listen'); }}>
+              Listen
+            </button>
+            <button type="button" className="nav-text" onClick={() => { setMenuOpen(false); setTab('add'); }}>
+              Add
+            </button>
+            <Link href="/pricing" className="nav-text" onClick={() => setMenuOpen(false)}>
+              Pricing
+            </Link>
+            <button
+              type="button"
+              className="nav-text"
+              onClick={() => {
+                setMenuOpen(false);
+                setSignOpen(true);
+              }}
+            >
+              Sign in
+            </button>
+          </nav>
+          <div className="nav-account">{accountControls()}</div>
+        </div>
       ) : null}
       <SignInPanel open={signOpen} onClose={() => setSignOpen(false)} onSignedIn={(value) => void signedIn(value)} />
 
@@ -1032,7 +1054,25 @@ export function AppShell() {
             </div>
             <div className="listen-hero">
               {episode ? (
-                <EpisodeCard episode={episode} playing={playing} onToggle={toggle} />
+                <EpisodeCard
+                  episode={episode}
+                  playing={playing}
+                  onToggle={toggle}
+                  controls={
+                    <PlaybackControls
+                      speedLabel={`${speed}×`}
+                      speeds={SPEEDS}
+                      speed={speed}
+                      voiceLabel={voices.find((voice) => voice.voiceURI === voiceId)?.name || 'Voice'}
+                      voices={voices.map((voice) => ({ id: voice.voiceURI, label: `${voice.name} · ${voice.lang}` }))}
+                      voiceId={voiceId}
+                      sleepLabel={SLEEPS[sleepI]}
+                      onPickSpeed={(rate) => setSpeedI(SPEEDS.indexOf(rate))}
+                      onPickVoice={pickVoice}
+                      onSleep={() => setSleepI((n) => (n + 1) % SLEEPS.length)}
+                    />
+                  }
+                />
               ) : (
                 <EmptyState title="Nothing to hear" body="Add a URL or paste on the Add tab. It will show up here." action={{ label: 'Add something', onClick: () => setTab('add') }} />
               )}

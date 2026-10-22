@@ -1,0 +1,259 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  A replacement Listen Later inbound-mail path. It leaves the website stack
+  alone and uses a secret you choose. Create this as a new stack named
+  listen-later-mail in N. Virginia.
+
+Parameters:
+  ApiDomain:
+    Type: String
+    Default: api.listenlater.in
+  InboundDomain:
+    Type: String
+    Default: save.listenlater.in
+  InboundSecret:
+    Type: String
+    NoEcho: true
+    MinLength: 12
+    Description: Write this down. Paste the same value into the website Admin, Inbound mail.
+
+Resources:
+  MailBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: expire-inbound
+            Status: Enabled
+            ExpirationInDays: 7
+            Prefix: inbound/
+
+  MailBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref MailBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowSesPut
+            Effect: Allow
+            Principal:
+              Service: ses.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub "${MailBucket.Arn}/inbound/*"
+            Condition:
+              StringEquals:
+                AWS:SourceAccount: !Ref AWS::AccountId
+
+  MailForwarderRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: read-inbound-mail
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: s3:GetObject
+                Resource: !Sub "${MailBucket.Arn}/inbound/*"
+
+  MailForwarder:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: nodejs20.x
+      Handler: index.handler
+      Timeout: 30
+      Role: !GetAtt MailForwarderRole.Arn
+      Environment:
+        Variables:
+          BUCKET: !Ref MailBucket
+          WEBHOOK_URL: !Sub "https://${ApiDomain}/v1/webhooks/inbound-email"
+          WEBHOOK_SECRET: !Ref InboundSecret
+      Code:
+        ZipFile: |
+          const { S3Client, GetObjectCommand } = require("@aws-sdk/client-s3");
+          const https = require("https");
+          const s3 = new S3Client({});
+          function header(raw, name) {
+            const match = raw.match(new RegExp("^" + name + ":\\s*(.*(?:\\r?\\n[ \\t].*)*)", "im"));
+            return match ? match[1].replace(/\r?\n[ \t]+/g, " ").trim() : "";
+          }
+          function decode(body, enc) {
+            if ((enc || "").toLowerCase().includes("base64")) return Buffer.from(body.replace(/\s/g, ""), "base64").toString("utf8");
+            const bytes = [];
+            const cleaned = body.replace(/=\r?\n/g, "");
+            for (let i = 0; i < cleaned.length; i++) {
+              if (cleaned[i] === "=" && /^[0-9A-Fa-f]{2}/.test(cleaned.slice(i + 1, i + 3))) {
+                bytes.push(parseInt(cleaned.slice(i + 1, i + 3), 16));
+                i += 2;
+              } else bytes.push(cleaned.charCodeAt(i) & 255);
+            }
+            return Buffer.from(bytes).toString("utf8");
+          }
+          function textFrom(raw) {
+            const parts = raw.split(/\r?\n\r?\n/);
+            const headers = parts.shift() || "";
+            const rest = parts.join("\n\n");
+            const type = header(headers, "content-type");
+            const boundary = /boundary="?([^";]+)"?/i.exec(type);
+            if (!boundary) return decode(rest, header(headers, "content-transfer-encoding"));
+            const fence = boundary[1].replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            let plain = "";
+            let html = "";
+            for (const chunk of rest.split(new RegExp("--" + fence))) {
+              const bits = chunk.split(/\r?\n\r?\n/);
+              const head = bits.shift() || "";
+              const decoded = decode(bits.join("\n\n"), header(head, "content-transfer-encoding"));
+              const kind = header(head, "content-type");
+              if (/text\/plain/i.test(kind) && !plain) plain = decoded;
+              if (/text\/html/i.test(kind) && !html) html = decoded;
+            }
+            const links = [...html.matchAll(/href=["'](https?:\/\/[^"']+)["']/gi)].map((item) => item[1]);
+            return [plain, links.join("\n")].filter(Boolean).join("\n\n") || html;
+          }
+          exports.handler = async (event) => {
+            const rec = event.Records[0];
+            const id = rec.ses.mail.messageId;
+            const obj = await s3.send(new GetObjectCommand({ Bucket: process.env.BUCKET, Key: "inbound/" + id }));
+            const raw = await obj.Body.transformToString();
+            const headers = raw.split(/\r?\n\r?\n/)[0] || "";
+            const body = JSON.stringify({
+              To: header(headers, "to") || (rec.ses.mail.destination || []).join(", "),
+              From: header(headers, "from") || rec.ses.mail.source,
+              Subject: header(headers, "subject"),
+              TextBody: textFrom(raw).slice(0, 200000)
+            });
+            await new Promise((resolve, reject) => {
+              const req = https.request(process.env.WEBHOOK_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body), "x-ll-secret": process.env.WEBHOOK_SECRET }
+              }, (res) => { res.resume(); res.on("end", resolve); });
+              req.on("error", reject);
+              req.write(body);
+              req.end();
+            });
+          };
+
+  MailForwarderPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref MailForwarder
+      Action: lambda:InvokeFunction
+      Principal: ses.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+
+  MailRuleSet:
+    Type: AWS::SES::ReceiptRuleSet
+    Properties:
+      RuleSetName: listen-later-mail
+
+  MailRule:
+    Type: AWS::SES::ReceiptRule
+    DependsOn:
+      - MailBucketPolicy
+      - MailForwarderPermission
+    Properties:
+      RuleSetName: !Ref MailRuleSet
+      Rule:
+        Name: listen-later-save
+        Enabled: true
+        ScanEnabled: false
+        Recipients:
+          - !Ref InboundDomain
+        Actions:
+          - S3Action:
+              BucketName: !Ref MailBucket
+              ObjectKeyPrefix: inbound/
+          - LambdaAction:
+              FunctionArn: !GetAtt MailForwarder.Arn
+              InvocationType: RequestResponse
+
+  MailActivatorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: activate-rule-set
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: ses:SetActiveReceiptRuleSet
+                Resource: "*"
+
+  MailActivator:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: nodejs20.x
+      Handler: index.handler
+      Timeout: 30
+      Role: !GetAtt MailActivatorRole.Arn
+      Code:
+        ZipFile: |
+          const https = require("https");
+          const { SESClient, SetActiveReceiptRuleSetCommand } = require("@aws-sdk/client-ses");
+          function reply(event, status, reason) {
+            const body = JSON.stringify({
+              Status: status,
+              Reason: reason || "ok",
+              PhysicalResourceId: "listen-later-mail-active-rules",
+              StackId: event.StackId,
+              RequestId: event.RequestId,
+              LogicalResourceId: event.LogicalResourceId,
+              Data: {}
+            });
+            const url = new URL(event.ResponseURL);
+            return new Promise((resolve, reject) => {
+              const req = https.request({ hostname: url.hostname, path: url.pathname + url.search, method: "PUT", headers: { "Content-Type": "", "Content-Length": Buffer.byteLength(body) } }, (res) => { res.resume(); res.on("end", resolve); });
+              req.on("error", reject);
+              req.write(body);
+              req.end();
+            });
+          }
+          exports.handler = async (event) => {
+            try {
+              const ses = new SESClient({});
+              if (event.RequestType === "Delete") {
+                await ses.send(new SetActiveReceiptRuleSetCommand({}));
+              } else {
+                await ses.send(new SetActiveReceiptRuleSetCommand({ RuleSetName: event.ResourceProperties.RuleSetName }));
+              }
+              await reply(event, "SUCCESS");
+            } catch (err) {
+              await reply(event, "FAILED", err.message);
+              throw err;
+            }
+          };
+
+  MailRuleSetActive:
+    Type: Custom::MailRuleSetActive
+    DependsOn: MailRule
+    Properties:
+      ServiceToken: !GetAtt MailActivator.Arn
+      RuleSetName: !Ref MailRuleSet

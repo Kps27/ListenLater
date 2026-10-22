@@ -93,10 +93,10 @@
   animation: story-flip 680ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
   transform-origin: center center;
 }
-.story-face h2,
-.story-face .source,
-.story-face .sub,
-.story-face .read-edit { align-self: flex-end; margin: 0 0 8px auto; color: #f3f0e8; border-color: rgb(255 255 255 / 0.28); }
+.player .story-face h2,
+.player .story-face .source,
+.player .story-face .sub,
+.player .story-face .read-edit { align-self: flex-end; margin: 0 0 8px auto; color: #f3f0e8; border-color: rgb(255 255 255 / 0.28); }
 .story-face .prose {
   animation: story-settle 460ms var(--ease) 90ms both;
 }
@@ -137,27 +137,41 @@
 }
 
 .episode {
-  background: var(--bg-elevated);
-  border: 1px solid var(--line);
+  position: relative;
+  background: #070910;
+  border: 1px solid rgb(246 243 255 / 0.08);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow);
-  padding: var(--space-6) var(--space-5);
+  padding: 22px 20px 18px;
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
-  gap: var(--space-3);
+  gap: 10px;
+  color: #f6f3ff;
 }
-.episode .source { color: var(--muted); font-size: var(--text-meta); letter-spacing: 0.04em; text-transform: uppercase; }
+.episode > :not(.play-bokeh) { position: relative; z-index: 1; }
+.episode .source { color: #d4ceea; font-size: var(--text-meta); letter-spacing: 0.04em; text-transform: uppercase; }
 .episode h2 {
+  align-self: center;
   font-family: var(--serif);
   font-weight: 520;
-  font-size: var(--text-display);
+  font-size: 1.5rem;
   line-height: 1.15;
   letter-spacing: -0.02em;
   margin: 0;
+  color: #f6f3ff;
 }
-.episode .meta { color: var(--muted); margin: 0; }
+.episode .play { width: 64px; height: 64px; }
+.episode .play svg { width: 24px; height: 24px; }
+.episode .row-controls { width: 100%; }
+.episode .ghost {
+  color: #f6f3ff;
+  border-color: rgb(246 243 255 / 0.32);
+  background: transparent;
+}
+.episode .voice-menu { color: var(--ink); }
+.episode .meta { color: #d4ceea; margin: 0; }
 
 .play {
   width: 72px;

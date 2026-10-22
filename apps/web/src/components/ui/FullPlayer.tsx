@@ -15,7 +15,7 @@ const ORBS = [
   { left: '42%', top: '64%', size: 300, color: '#2C3A62', dx: '-130px', dy: '-120px', dur: '9s', delay: '-4s' },
 ];
 
-function PlayBokeh() {
+export function PlayBokeh() {
   return (
     <span className="play-bokeh" aria-hidden="true">
       <span className="play-sheen" />
@@ -37,6 +37,114 @@ function PlayBokeh() {
         />
       ))}
     </span>
+  );
+}
+
+export function PlaybackControls({
+  speedLabel,
+  speeds,
+  speed,
+  voiceLabel,
+  voices,
+  voiceId,
+  sleepLabel,
+  onSpeed,
+  onPickSpeed,
+  onPickVoice,
+  onSleep,
+}: {
+  speedLabel?: string;
+  speeds?: number[];
+  speed?: number;
+  voiceLabel?: string;
+  voices?: VoiceOption[];
+  voiceId?: string;
+  sleepLabel?: string;
+  onSpeed?: () => void;
+  onPickSpeed?: (rate: number) => void;
+  onPickVoice?: (id: string) => void;
+  onSleep?: () => void;
+}) {
+  const [voicesOpen, setVoicesOpen] = useState(false);
+  const [speedOpen, setSpeedOpen] = useState(false);
+  return (
+    <div className="row-controls">
+      <div className="voice-picker">
+        <button
+          type="button"
+          className="ghost"
+          aria-expanded={speedOpen}
+          aria-haspopup="listbox"
+          aria-label="Playback speed"
+          onClick={() => {
+            if (!speeds?.length) {
+              onSpeed?.();
+              return;
+            }
+            setVoicesOpen(false);
+            setSpeedOpen((open) => !open);
+          }}
+        >
+          {speedLabel || '1.25×'}
+        </button>
+        {speedOpen && speeds?.length ? (
+          <ul className="voice-menu speed-menu" role="listbox" aria-label="Playback speed">
+            {speeds.map((rate) => (
+              <li key={rate}>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={rate === speed}
+                  onClick={() => {
+                    onPickSpeed?.(rate);
+                    setSpeedOpen(false);
+                  }}
+                >
+                  {rate}×
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
+      <div className="voice-picker">
+        <button
+          type="button"
+          className="ghost"
+          aria-expanded={voicesOpen}
+          aria-haspopup="listbox"
+          aria-label="Voice"
+          onClick={() => {
+            setSpeedOpen(false);
+            setVoicesOpen((open) => !open);
+          }}
+        >
+          {voiceLabel || 'Voice'}
+        </button>
+        {voicesOpen && voices?.length ? (
+          <ul className="voice-menu" role="listbox" aria-label="Voices">
+            {voices.map((voice) => (
+              <li key={voice.id}>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={voice.id === voiceId}
+                  onClick={() => {
+                    onPickVoice?.(voice.id);
+                    setVoicesOpen(false);
+                  }}
+                >
+                  {voice.label}
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
+      <button type="button" className="ghost" onClick={onSleep}>
+        {sleepLabel || 'Sleep'}
+      </button>
+    </div>
   );
 }
 
@@ -93,8 +201,6 @@ export function FullPlayer({
   onSleep?: () => void;
   onScrub?: (ratio: number) => void;
 }) {
-  const [voicesOpen, setVoicesOpen] = useState(false);
-  const [speedOpen, setSpeedOpen] = useState(false);
   const max = Math.max(episode.durationMin * 60, 1);
   const value = Math.round(episode.progress * max);
   return (
@@ -146,80 +252,19 @@ export function FullPlayer({
           +15
         </button>
       </div>
-      <div className="row-controls">
-        <div className="voice-picker">
-          <button
-            type="button"
-            className="ghost"
-            aria-expanded={speedOpen}
-            aria-haspopup="listbox"
-            aria-label="Playback speed"
-            onClick={() => {
-              if (!speeds?.length) {
-                onSpeed?.();
-                return;
-              }
-              setVoicesOpen(false);
-              setSpeedOpen((open) => !open);
-            }}
-          >
-            {speedLabel || '1.25×'}
-          </button>
-          {speedOpen && speeds?.length ? (
-            <ul className="voice-menu speed-menu" role="listbox" aria-label="Playback speed">
-              {speeds.map((rate) => (
-                <li key={rate}>
-                  <button
-                    type="button"
-                    role="option"
-                    aria-selected={rate === speed}
-                    onClick={() => {
-                      onPickSpeed?.(rate);
-                      setSpeedOpen(false);
-                    }}
-                  >
-                    {rate}×
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </div>
-        <div className="voice-picker">
-          <button
-            type="button"
-            className="ghost"
-            aria-expanded={voicesOpen}
-            aria-haspopup="listbox"
-            onClick={() => {
-              setSpeedOpen(false);
-              setVoicesOpen((open) => !open);
-            }}
-          >
-            {voiceLabel || 'Voice'}
-          </button>
-          {voicesOpen && voices?.length ? (
-            <ul className="voice-menu" role="listbox" aria-label="Voices">
-              {voices.map((voice) => (
-                <li key={voice.id}>
-                  <button
-                    type="button"
-                    role="option"
-                    aria-selected={voice.id === voiceId}
-                    onClick={() => {
-                      onPickVoice?.(voice.id);
-                      setVoicesOpen(false);
-                    }}
-                  >
-                    {voice.label}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </div>
-        <button type="button" className="ghost" onClick={onSleep}>{sleepLabel || 'Sleep'}</button>
-      </div>
+      <PlaybackControls
+        speedLabel={speedLabel}
+        speeds={speeds}
+        speed={speed}
+        voiceLabel={voiceLabel}
+        voices={voices}
+        voiceId={voiceId}
+        sleepLabel={sleepLabel}
+        onSpeed={onSpeed}
+        onPickSpeed={onPickSpeed}
+        onPickVoice={onPickVoice}
+        onSleep={onSleep}
+      />
       {onToggleText ? (
         <button type="button" className="read-peek" onClick={onToggleText}>
           {showText ? 'Show cover' : 'Read along'}

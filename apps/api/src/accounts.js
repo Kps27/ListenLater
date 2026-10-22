@@ -59,6 +59,28 @@ export function issuePin(db, email, mailConfigured) {
   };
 }
 
+export function mailReady(auth) {
+  return Boolean(auth?.mail_host && auth?.mail_from && auth?.mail_user && auth?.mail_password);
+}
+
+export async function deliverPin(issued, auth, send) {
+  if (!mailReady(auth)) return issued;
+  try {
+    await send({
+      host: auth.mail_host,
+      port: Number(auth.mail_port) || 587,
+      user: auth.mail_user,
+      password: auth.mail_password,
+      from: auth.mail_from,
+      to: issued.email,
+      pin: issued.preview_pin,
+    });
+  } catch (err) {
+    throw Object.assign(new Error('mail_failed'), { code: 'mail_failed', cause: err });
+  }
+  return { email: issued.email, delivery: 'email', preview_pin: null, sender: 'saved' };
+}
+
 export function verifyPin(db, email, pin, adoptGuest) {
   const normalized = emailOf(email);
   const row = db.prepare('select pin_hash, expires_at from login_pins where email = ?').get(normalized);

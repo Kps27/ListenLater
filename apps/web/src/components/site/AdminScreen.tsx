@@ -77,6 +77,7 @@ const EMPTY_AUTH: AdminSite['auth_secrets'] = {
   apple_key_set: false,
   mail_from: '',
   mail_host: '',
+  mail_port: '587',
   mail_user: '',
   mail_password: '',
   mail_password_set: false,
@@ -116,6 +117,7 @@ type AdminSite = {
     apple_key_set: boolean;
     mail_from: string;
     mail_host: string;
+    mail_port: string;
     mail_user: string;
     mail_password: string;
     mail_password_set: boolean;
@@ -559,7 +561,7 @@ export function AdminScreen() {
             <fieldset hidden={panel !== 'signin'}>
               <legend>Sign in</legend>
               <p className="fine">
-                Email codes and passwords work now. Google, Apple, and mail stay empty until you add them. Leave a secret blank to keep the one already saved. Codes are shown on the sign-in card until sending is connected.
+                Email codes and passwords work now. Google and Apple stay empty until you add them. Leave a secret blank to keep the one already saved. A code is emailed when From, host, user, and password are all saved. Until then the code stays on the sign-in card.
               </p>
               <label>
                 Mail from
@@ -568,6 +570,10 @@ export function AdminScreen() {
               <label>
                 Mail host
                 <input className="field" value={site.auth_secrets.mail_host} placeholder="smtp.example.com" onChange={(e) => patch({ auth_secrets: { ...site.auth_secrets, mail_host: e.target.value } })} />
+              </label>
+              <label>
+                Mail port
+                <input className="field" value={site.auth_secrets.mail_port || '587'} onChange={(e) => patch({ auth_secrets: { ...site.auth_secrets, mail_port: e.target.value } })} />
               </label>
               <label>
                 Mail user

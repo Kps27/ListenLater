@@ -10,6 +10,14 @@ const LINKS = [
   { href: '/app', label: 'Sign in' },
 ];
 
+const MENU = [
+  { href: '/', label: 'Home' },
+  { href: '/app', label: 'Listen' },
+  { href: '/app?tab=add', label: 'Add' },
+  { href: '/pricing', label: 'Pricing' },
+  { href: '/app', label: 'Sign in' },
+];
+
 export function SiteHeader() {
   const [open, setOpen] = useState(false);
 
@@ -18,11 +26,17 @@ export function SiteHeader() {
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') setOpen(false);
     }
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = previous;
+      window.removeEventListener('keydown', onKey);
+    };
   }, [open]);
 
   return (
+    <>
     <header className="market-nav">
       <Link href="/" className="market-word" aria-label="Listen Later">
         <BrandMark />
@@ -50,22 +64,18 @@ export function SiteHeader() {
         </Link>
       </nav>
       </div>
-      {open ? (
-        <>
-          <button type="button" className="nav-scrim" aria-label="Close menu" onClick={() => setOpen(false)} />
-          <nav className="nav-drawer" id="site-menu" aria-label="Site">
-            <p className="nav-kicker">Menu</p>
-            {LINKS.map((link) => (
-              <Link key={link.label} href={link.href} className="nav-text" onClick={() => setOpen(false)}>
-                {link.label}
-              </Link>
-            ))}
-            <Link href="/app" className="primary" onClick={() => setOpen(false)}>
-              Start listening
-            </Link>
-          </nav>
-        </>
-      ) : null}
     </header>
+    {open ? (
+      <div className="nav-overlay" role="dialog" aria-modal="true" aria-label="Menu">
+        <nav id="site-menu" aria-label="Site">
+          {MENU.map((link) => (
+            <Link key={link.label} href={link.href} className="nav-text" onClick={() => setOpen(false)}>
+              {link.label}
+            </Link>
+          ))}
+        </nav>
+      </div>
+    ) : null}
+    </>
   );
 }

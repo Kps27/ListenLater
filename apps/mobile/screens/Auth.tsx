@@ -10,6 +10,7 @@ function message(code?: string) {
   if (code === 'invalid_pin') return 'That code does not match, or it has expired.';
   if (code === 'invalid_password') return 'That password does not match.';
   if (code === 'weak_password') return 'Use at least 8 characters.';
+  if (code === 'mail_failed') return 'The code could not be emailed. Check the mail settings in Admin.';
   return 'Sign in did not reach the server.';
 }
 
@@ -113,7 +114,7 @@ export function Auth({ onSignedIn }: { onSignedIn: (email: string) => void }) {
       ) : null}
       {step === 'pin' ? (
         <>
-          <Text style={styles.body}>Mail is not connected yet. Use this code, then choose a password.</Text>
+          <Text style={styles.body}>{preview ? 'Mail is not connected yet. Use this code, then choose a password.' : `We emailed a code to ${email}. It expires in 10 minutes.`}</Text>
           {preview ? <Text style={styles.pin}>{preview}</Text> : null}
           <Text style={styles.label}>Code</Text>
           <TextInput style={styles.input} keyboardType="number-pad" value={pin} onChangeText={setPin} />
